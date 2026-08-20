@@ -11,7 +11,6 @@ import FormField from "@/components/FormField";
 import {Input} from "@/components/ui/input"
 import Link from "next/link";
 import {toast} from "sonner";
-import {router} from "next/client";
 import {useRouter} from "next/navigation";
 
 const authFormSchema = (type: FormType) => {
@@ -47,21 +46,19 @@ const AuthForm = ({type}: { type: FormType }) => {
     })
 
 // 2. 定义表单提交处理函数
+    //提交之后的状态
     function onSubmit(values: z.infer<typeof formSchema>) {
-        //提交之后的状态
-        function onSubmit(values: z.infer<typeof formSchema>) {
-            try {
-                if (type === "sign-up") {
-                    toast.success("Sign up successfully!");
-                    router.push("/sign-in");
-                } else {
-                    toast.success("Sign in successfully!");
-                    router.push("/");
-                }
-            } catch (error) {
-                console.log(error);
-                toast.error(`发生错误：${error}`);
+        try {
+            if (type === "sign-up") {
+                toast.success("Sign up successfully!");
+                router.push("/sign-in");
+            } else {
+                toast.success("Sign in successfully!");
+                router.push("/");
             }
+        } catch (error) {
+            console.log(error);
+            toast.error(`发生错误：${error}`);
         }
     }
 
