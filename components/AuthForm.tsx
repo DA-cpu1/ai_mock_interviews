@@ -12,6 +12,9 @@ import {Input} from "@/components/ui/input"
 import Link from "next/link";
 import {toast} from "sonner";
 import {useRouter} from "next/navigation";
+import {signIn, signUp} from "@/lib/action/auth.action";
+import {auth} from "@/firebase/client";
+import {createUserWithEmailAndPassword, signInWithEmailAndPassword} from "firebase/auth";
 
 const authFormSchema = (type: FormType) => {
     return z.object({
@@ -47,13 +50,58 @@ const AuthForm = ({type}: { type: FormType }) => {
 
 // 2. 定义表单提交处理函数
     //提交之后的状态
-    function onSubmit(values: z.infer<typeof formSchema>) {
+    async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
             if (type === "sign-up") {
+                //先在 Firebase Authentication 创建账号，然后保存用户资料
+                const {name, email, password} = values;
+
+                //通过 Zod 校验取出姓名、邮箱和密码
+                const userCredentials = await createUserWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
+
+                //校验
+                const result = await signUp({
+                    uid: userCredentials.user.uid,
+                    name: name!,
+                    email,
+                    password,
+                });
+
+                if (!result?.success) {
+                    toast.error(result?.message);
+                    return;
+                }
+
                 toast.success("Sign up successfully!");
                 router.push("/sign-in");
             } else {
-                toast.success("Sign in successfully!");
+                const {email, password} = values;
+
+                // 使用邮箱和密码完成 Firebase 客户端身份验证
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+                // 获取 Firebase 为当前用户签发的 ID Token
+                const idToken = await userCredential.user.getIdToken();
+
+                // 未获取到 Token 时终止登录流程
+                if (!idToken) {
+                    toast.error("登录失败");
+                    return;
+                }
+
+                // 将 ID Token 交给服务端验证，并创建 Session Cookie
+                const result = await signIn({idToken});
+
+                if (!result.success) {
+                    toast.error(result.message);
+                    return;
+                }
+
+                toast.success("登录成功");
                 router.push("/");
             }
         } catch (error) {
