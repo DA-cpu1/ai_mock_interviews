@@ -25,7 +25,7 @@
 |---------------------------------|---------------------------------------------------------|--------------------------------------------------------------|
 | `package.json`                  | 没有 RTC、语音或 AI SDK 依赖                            | 可直接引入 AICallKit，不存在旧链路迁移                       |
 | `components/Agent.tsx`          | 已有 `messages`、`isSpeaking`、`onCall`、`onDisconnect` | 视觉组件可复用，但通话状态必须改为由真实 SDK 事件驱动        |
-| `app/(root)/interview/page.tsx` | 固定用户名 `Sr`，没有真实面试和用户数据                 | 改为服务端读取当前用户和 `interviewId`，再传给客户端会话容器 |
+| `app/(root)/interview/[interviewId]/page.tsx` | 服务端校验面试归属，再把用户名和面试 ID 传给客户端 | 页面不向浏览器下发完整面试记录 |
 | `types/index.d.ts`              | 已有 `Interview`、`Feedback`、`feedbackSchema`          | 可扩展实时会话与字幕类型，反馈结构继续复用                   |
 | Firebase                        | 已有服务端 Session Cookie 验证与 Firestore              | Token 接口、回调入库、会话归属校验可沿用                     |
 | Next.js 16.3.1                  | Route Handler 适合短请求，不应承担常驻 WebSocket        | 本方案不新增 Next.js 音频长连接，能兼容常见 serverless 部署  |
@@ -49,7 +49,7 @@
 | LLM      | IMS 工作流中的系统预置千问；通过每通 `llmSystemPrompt` 注入岗位、级别和问题               |
 | TTS      | 系统预置 TTS / Qwen3-TTS，使用系统音色                                                    |
 | 数据保存 | 保存权威文本转录和反馈，不保存音频                                                        |
-| 会话限制 | 单用户仅 1 通活跃会话；单通最多 30 分钟；默认每日最多 5 通                                |
+| 会话限制 | 单用户仅 1 通活跃会话；单通最多 30 分钟；测试阶段不设每日次数限制                         |
 | 地域     | 中国内地用户优先选择与部署、Firestore 网络路径匹配的同一内地域；P0 可先用现有账号可用地域 |
 | 非首期   | 数字人、摄像头、VCR 防作弊、声纹、声音克隆、移动端专项适配、电话呼入呼出                  |
 
@@ -601,7 +601,7 @@ OpenAI-compatible endpoint；不要启用 Vercel AI Gateway，除非已明确接
 ### 服务端
 
 - 未登录、Session 过期、越权 interviewId、非法 body。
-- 单用户并发、每日上限、全局并发。
+- 单用户活跃会话、10 秒创建间隔和单通上限。
 - 回调伪造、重复、乱序、迟到、字段新增、超大 body。
 - Firestore 短暂失败、CallLogUrl 尚未生成、反馈模型超时。
 
@@ -642,13 +642,13 @@ OpenAI-compatible endpoint；不要启用 Vercel AI Gateway，除非已明确接
 
 新用户标准模式会打包收取 STT、TTS、智能体运行时长。首期使用预置能力，避免第三方 STT/TTS 造成重复计费；如果切换非预置服务，要先向阿里云提交工单评估单项计费模式。
 
-IMS 按量计费不应被视为自动预算熔断，因此应用侧必须实现：
+IMS 按量计费不应被视为自动预算熔断。当前测试阶段先实现：
 
-- 单用户单通和每日限额。
+- 单用户单通限制。
 - 单通 30 分钟强制结束。
-- 全局并发阈值。
-- 日费用估算与告警。
 - 紧急 Feature Flag，关闭新会话但不强杀正在进行的通话。
+
+公开上线前再根据预算补充每日或每月限额、全局并发阈值和费用告警。
 
 ## 15. 上线与回滚
 
@@ -662,7 +662,6 @@ ALIYUN_RTC_APP_KEY=
 ALIYUN_AI_CALLBACK_TOKEN=
 AI_REALTIME_ENABLED=false
 AI_REALTIME_MAX_SESSION_MINUTES=30
-AI_REALTIME_DAILY_LIMIT=5
 ```
 
 不要把任何密钥放进 `.env.example` 的真实值，也不要使用 `NEXT_PUBLIC_`。

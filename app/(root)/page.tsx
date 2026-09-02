@@ -34,8 +34,13 @@ const Page = () => {
                 <h2>你的面试</h2>
 
                 <div className="interviews-section">
+                    {/* 演示数据使用 id，卡片链接需要明确收到 interviewId。 */}
                     {dummyInterviews.map((interview) => (
-                        <InterviewCard key={interview.id} {...interview} />
+                        <InterviewCard
+                            key={interview.id}
+                            {...interview}
+                            interviewId={interview.id}
+                        />
                     ))}
                 </div>
             </section>
@@ -44,7 +49,11 @@ const Page = () => {
                 <h2>开始面试</h2>
                 <div className="interviews-section">
                     {dummyInterviews.map((interview) => (
-                        <InterviewCard key={interview.id} {...interview} />
+                        <InterviewCard
+                            key={interview.id}
+                            {...interview}
+                            interviewId={interview.id}
+                        />
                     ))}
                 </div>
 
