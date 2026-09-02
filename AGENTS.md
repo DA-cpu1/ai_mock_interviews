@@ -42,7 +42,7 @@ These instructions apply to the entire repository. Keep the Next.js-managed bloc
 ## Repository map and ownership
 
 - `app/(auth)/` owns sign-in/sign-up layouts and pages; `app/(root)/` owns authenticated product pages. Route groups do not change URL paths.
-- `app/api/` contains App Router Route Handlers. `app/api/ai-realtime/sessions/route.ts` currently accepts only authenticated `POST` requests with an empty JSON object and returns short-lived browser connection data.
+- `app/api/` contains App Router Route Handlers. `app/api/ai-realtime/sessions/route.ts` accepts authenticated `POST` requests with an `interviewId`, checks ownership, and returns short-lived browser connection data.
 - `components/ui/` contains shared shadcn-style primitives. Keep feature-specific orchestration in its feature area, such as `components/interview/`, instead of expanding primitives with business logic.
 - `firebase/client.ts` is browser Firebase setup. `firebase/admin.ts`, `lib/action/`, and `lib/aliyun/*.server.ts` are server-side boundaries.
 - Shared domain declarations live in `types/`; generic helpers live in `lib/`; static mappings and seed/demo data live in `constants/`; public assets live in `public/`.
@@ -70,7 +70,7 @@ These instructions apply to the entire repository. Keep the Next.js-managed bloc
 ## Product scope and architecture decisions
 
 - The default product is personal AI interview practice on desktop browsers, currently voice-only. Do not silently expand it into formal recruiting, proctoring, video, recording, or high-stakes scoring.
-- `/interview/aliyun-test` is the isolated AICallKit verification page; `/interview` uses the reusable interview client. Prove vendor SDK behavior on the test page before integrating new behavior into the main flow.
+- `/interview/aliyun-test` is the isolated AICallKit verification page; `/interview` is the selection guide and `/interview/[interviewId]` uses the reusable interview client. Prove vendor SDK behavior on the test page before integrating new behavior into the main flow.
 - Retain the current Alibaba Cloud IMS/ARTC approach. The browser starts the practice call with short-lived server-issued connection data; Next.js handles auth, token/session preparation, persistence, callbacks, and later feedback—not STT/LLM/TTS streaming.
 - Formal hiring, examination, or paid certification requires an explicit architecture decision: server-started agent instances and server callback/CallLog data as the scoring authority. Obtain approval before making that switch.
 - Preserve the rollback flag and disabled state. Do not implement later phases from the roadmap unless the current user request includes them.

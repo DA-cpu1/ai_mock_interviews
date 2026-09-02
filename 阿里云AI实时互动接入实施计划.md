@@ -295,7 +295,7 @@ idle
 
 1. 用 Firebase Session Cookie 验证登录。
 2. 读取 `Interview`，校验用户有权启动这次面试。
-3. 检查单用户活跃会话、每日次数、单通上限和全局并发。
+3. 检查单用户活跃会话、10 秒创建间隔和单通上限；测试阶段不设每日次数与全局并发。
 4. 生成不可预测的 `sessionId` 与合法 `channelId`。
 5. 将 Firebase UID 哈希/规范化为最长 64 字节、只包含字母数字与 `_` 的 RTC `userId`。
 6. 使用 Node `crypto` 和服务端 App ID/App Key 生成短期 ARTC Token。
@@ -481,13 +481,13 @@ OpenAI-compatible endpoint；不要启用 Vercel AI Gateway，除非已明确接
 - 新增环境变量与 `server-only` 配置模块。
 - 实现 ARTC Token 生成及单元测试。
 - 实现 `POST /api/ai-realtime/sessions`。
-- 新建 Firestore Session 数据结构、活跃会话约束和每日配额。
-- 给接口加 Firebase auth、ownership 校验、Zod 和限流。
+- 新建 Firestore Session 数据结构和单用户活跃会话约束。
+- 给接口加 Firebase auth、ownership 校验、Zod 和 10 秒创建限流。
 
 完成标准：
 
 - 浏览器 bundle 中找不到 App Key / AccessKey / 回调 Token。
-- 未登录、越权、超额、重复启动均被拒绝。
+- 未登录、越权、请求过快、重复启动均被拒绝。
 - Token 过期和错误可返回可识别错误码。
 
 ### P2：AICallKit 与现有 UI 集成（2 天）

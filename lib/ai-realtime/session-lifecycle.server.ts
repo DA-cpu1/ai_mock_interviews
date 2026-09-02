@@ -6,7 +6,9 @@ import type {
     AiRealtimeSessionRecord,
     AiRealtimeUserSessionState,
 } from "@/types/ai-realtime";
-const ACTIVE_GRACE_MS = 2 * 60 * 1000;
+
+import {getSessionStartPlan} from "./session-lifecycle-policy";
+
 type LifecycleAction = "start" | "end";
 
 export class SessionLifecycleError extends Error {
@@ -50,38 +52,29 @@ export const updateSessionLifecycle = async ({
             : undefined;
 
         if (action === "start") {
-            const ownsValidLock = state?.activeSessionId === sessionId
-                && Boolean(state.leaseExpiresAt)
-                && Date.parse(state.leaseExpiresAt ?? "") > now.getTime();
-            // SDK 可能重复通知接通；只有锁仍有效时才能直接当作成功。
-            if (session.status === "active" && ownsValidLock) return null;
-            if (session.status === "active") {
-                throw new SessionLifecycleError("SESSION_EXPIRED");
-            }
-            if (session.status !== "created") {
+            const plan = getSessionStartPlan(session, state, now.getTime(), maxSessionMinutes);
+            if (plan.kind === "already-active") return null;
+            if (plan.kind === "invalid") {
                 throw new SessionLifecycleError("INVALID_SESSION_STATE");
             }
-
-            const tokenExpired = Date.parse(session.tokenExpiresAt) <= now.getTime();
-            const lockLost = !ownsValidLock;
-            if (tokenExpired || lockLost) {
+            if (plan.kind === "expired") {
                 transaction.update(sessionRef, {
                     status: "failed",
                     errorCode: "SESSION_EXPIRED",
                     leaseExpiresAt: nowIso,
                 });
-                if (!lockLost) {
+                if (state?.activeSessionId === sessionId) {
                     transaction.update(stateRef, {activeSessionId: null, leaseExpiresAt: null});
                 }
                 return "SESSION_EXPIRED" as const;
             }
 
-            // 接通后把占用时间延长到最长通话时间，并多留两分钟做清理。
-            const leaseExpiresAt = new Date(
-                now.getTime() + maxSessionMinutes * 60_000 + ACTIVE_GRACE_MS,
-            ).toISOString();
-            transaction.update(sessionRef, {status: "active", startedAt: nowIso, leaseExpiresAt});
-            transaction.update(stateRef, {leaseExpiresAt});
+            transaction.update(sessionRef, {
+                status: "active",
+                startedAt: nowIso,
+                leaseExpiresAt: plan.leaseExpiresAt,
+            });
+            transaction.update(stateRef, {leaseExpiresAt: plan.leaseExpiresAt});
             return null;
         }
 

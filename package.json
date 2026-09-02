@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:artc-token": "node --conditions=react-server --test tests/ai-realtime/rtc-token.test.ts"
+    "test:artc-token": "node --conditions=react-server --test tests/ai-realtime/rtc-token.test.ts",
+    "test:ai-realtime": "node --conditions=react-server --test tests/ai-realtime/*.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

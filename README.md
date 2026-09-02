@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## 阿里云实时互动
 
-已验证的 AICallKit 测试页为 `/interview/aliyun-test`。要启用真实语音通话，请在 `.env.local` 配置服务端变量；`ALIYUN_RTC_APP_KEY` 只放在服务端，不能使用 `NEXT_PUBLIC_` 前缀：
+正式面试从 `/interview/{interviewId}` 进入，记录必须已存在于 Firestore 并属于当前用户。AICallKit 测试页为 `/interview/aliyun-test?interviewId={interviewId}`。要启用真实语音通话，请在 `.env.local` 配置服务端变量；`ALIYUN_RTC_APP_KEY` 只放在服务端，不能使用 `NEXT_PUBLIC_` 前缀：
 
 ```text
 AI_REALTIME_ENABLED=true
