@@ -36,6 +36,8 @@ type AliyunSubtitle = import("aliyun-auikit-aicall").AICallSubtitleData;
 interface AliyunInterviewClientProps {
     // 当前候选人的姓名，用于界面展示和头像首字母。
     userName: string;
+    // 这次通话对应的已保存面试；服务端会再次检查它是否属于当前用户。
+    interviewId?: string;
     // test 为独立测试台，interview 为正式面试页面；两者共用同一套通话逻辑。
     variant?: "test" | "interview";
 }
@@ -123,9 +125,10 @@ const formatTime = () =>
     });
 
 const AliyunInterviewClient = ({
-                                   userName,
-                                   variant = "test",
-                               }: AliyunInterviewClientProps) => {
+    userName,
+    interviewId,
+    variant = "test",
+}: AliyunInterviewClientProps) => {
     // 这些状态共同驱动页面上的通话按钮、状态标签、字幕和错误提示。
     const [callStatus, setCallStatus] = useState<AiRealtimeCallStatus>("idle");
     const [agentState, setAgentState] = useState<AiRealtimeAgentState>("idle");
@@ -202,6 +205,33 @@ const AliyunInterviewClient = ({
         removeListenersRef.current = null;
     }, []);
 
+    // 把 SDK 的接通和结束结果告诉服务端，让数据库里的会话状态保持一致。
+    const updateServerSession = useCallback(async (action: "start" | "end") => {
+        const sessionId = sessionRef.current?.sessionId;
+        if (!sessionId) return;
+
+        const response = await fetch(
+            `/api/ai-realtime/sessions/${encodeURIComponent(sessionId)}/${action}`,
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({}),
+                // 页面正在关闭时，也尽量把结束通知送到服务端。
+                keepalive: action === "end",
+            },
+        );
+
+        if (!response.ok) {
+            const payload: unknown = await response.json().catch(() => null);
+            const message = payload && typeof payload === "object" && "error" in payload
+                ? (payload.error as {message?: string})?.message
+                : undefined;
+            throw new Error(message || `服务端返回 ${response.status}`);
+        }
+
+        appendEvent(action === "start" ? "服务端已记录通话开始" : "服务端已记录通话结束");
+    }, [appendEvent]);
+
     // 统一释放 SDK 资源。requestHangup=true 表示主动挂断，false 表示 SDK 已经因错误/结束而触发清理。
     const cleanupEngine = useCallback(
         async (finalStatus: "ended" | "error", requestHangup: boolean) => {
@@ -213,6 +243,12 @@ const AliyunInterviewClient = ({
             const engine = engineRef.current;
 
             if (!engine) {
+                try {
+                    await updateServerSession("end");
+                } catch (error) {
+                    appendEvent(`结束状态未能保存：${toErrorMessage(error)}`);
+                }
+                sessionRef.current = null;
                 if (mountedRef.current) setCallStatus(finalStatus);
                 return;
             }
@@ -239,6 +275,11 @@ const AliyunInterviewClient = ({
                         // The engine may already have been destroyed by handup().
                     }
                 } finally {
+                    try {
+                        await updateServerSession("end");
+                    } catch (error) {
+                        appendEvent(`结束状态未能保存：${toErrorMessage(error)}`);
+                    }
                     removeEngineListeners();
 
                     if (engineRef.current === engine) {
@@ -269,7 +310,7 @@ const AliyunInterviewClient = ({
                 }
             }
         },
-        [appendEvent, removeEngineListeners],
+        [appendEvent, removeEngineListeners, updateServerSession],
     );
 
     // 统一处理 SDK 错误：展示友好提示、记录诊断日志，并触发资源清理。
@@ -292,8 +333,17 @@ const AliyunInterviewClient = ({
         (engine: AliyunCallEngine) => {
             // RTC 真正接通后才进入 active 状态，按钮也在此时可用。
             const onCallBegin = () => {
-                setCallStatus("active");
-                appendEvent("callBegin · 已接入 RTC 通话");
+                void updateServerSession("start")
+                    .then(() => {
+                        if (mountedRef.current) setCallStatus("active");
+                        appendEvent("callBegin · 已接入 RTC 通话");
+                    })
+                    .catch((error) => {
+                        const message = toErrorMessage(error);
+                        if (mountedRef.current) setErrorMessage(message);
+                        appendEvent(`开始状态未能保存：${message}`);
+                        if (!endingRef.current) void cleanupEngine("error", true);
+                    });
             };
             const onCallEnd = () => {
                 appendEvent("callEnd · SDK 通知通话结束");
@@ -379,13 +429,18 @@ const AliyunInterviewClient = ({
                 engine.off("errorOccurred", handleSdkError);
             };
         },
-        [appendEvent, cleanupEngine, handleSdkError, mergeSubtitle],
+        [appendEvent, cleanupEngine, handleSdkError, mergeSubtitle, updateServerSession],
     );
 
     // 启动一次完整的 AI 语音面试：麦克风权限 -> 服务端会话配置 -> AICallKit -> RTC 通话。
     const startCall = useCallback(async () => {
         //防止重复呼叫和并发冲突
         if (startingRef.current || endingRef.current || engineRef.current) return;
+        if (!interviewId) {
+            setErrorMessage("请先选择一场已保存的面试。");
+            setCallStatus("error");
+            return;
+        }
 
         //初始化本次通话的页面状态
         startingRef.current = true;
@@ -415,7 +470,7 @@ const AliyunInterviewClient = ({
             const response = await fetch("/api/ai-realtime/sessions", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({}),
+                body: JSON.stringify({interviewId}),
             });
             const payload: unknown = await response.json().catch(() => null);
 
@@ -481,7 +536,7 @@ const AliyunInterviewClient = ({
             setErrorMessage(message);
             appendEvent(`启动失败 · ${message}`);
 
-            if (engineRef.current && !endingRef.current) {
+            if (sessionRef.current && !endingRef.current) {
                 await cleanupEngine("error", false);
             } else {
                 setCallStatus("error");
@@ -489,7 +544,7 @@ const AliyunInterviewClient = ({
         } finally {
             startingRef.current = false;
         }
-    }, [appendEvent, cleanupEngine, registerEngineListeners, variant]);
+    }, [appendEvent, cleanupEngine, interviewId, registerEngineListeners, variant]);
 
     // 用户主动挂断当前通话。
     const endCall = useCallback(() => {
@@ -570,10 +625,11 @@ const AliyunInterviewClient = ({
         const handleBeforeUnload = () => {
             const engine = engineRef.current;
 
-            if (!engine || endingRef.current) return;
+            if ((!engine && !sessionRef.current) || endingRef.current) return;
 
             endingRef.current = true;
-            void engine.handup().catch(() => engine.destroy());
+            void updateServerSession("end").catch(() => undefined);
+            if (engine) void engine.handup().catch(() => engine.destroy());
         };
 
         window.addEventListener("beforeunload", handleBeforeUnload);
@@ -584,12 +640,13 @@ const AliyunInterviewClient = ({
 
             const engine = engineRef.current;
 
-            if (engine && !endingRef.current) {
+            if ((engine || sessionRef.current) && !endingRef.current) {
                 endingRef.current = true;
-                void engine.handup().catch(() => engine.destroy());
+                void updateServerSession("end").catch(() => undefined);
+                if (engine) void engine.handup().catch(() => engine.destroy());
             }
         };
-    }, []);
+    }, [updateServerSession]);
 
     // 将底层状态整理成渲染层需要的布尔值和文案。
     const isConnecting =
