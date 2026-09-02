@@ -18,6 +18,10 @@ import {
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
+import {
+    mergeSubtitleMessage,
+    parseSubtitleUpdate,
+} from "@/lib/ai-realtime/subtitle-protocol";
 import type {
     AiRealtimeAgentState,
     AiRealtimeCallStatus,
@@ -174,29 +178,9 @@ const AliyunInterviewClient = ({
     // 合并流式字幕：同一个角色的同一个 sentenceId 代表同一句话，后续片段更新原记录而不是重复追加。
     // [INTERVIEW_COMPLETE] 是后端/智能体用于通知面试结束的控制标记，不应该显示给候选人。
     const mergeSubtitle = useCallback((role: AiRealtimeSubtitleRole, subtitle: AliyunSubtitle) => {
-        const cleanedText = subtitle.text.replace("[INTERVIEW_COMPLETE]", "").trim();
-
-        if (!cleanedText) return;
-
-        const id = `${role}:${subtitle.sentenceId}`;
-
-        setMessages((current) => {
-            const index = current.findIndex((message) => message.id === id);
-            const nextMessage: AiRealtimeSubtitle = {
-                id,
-                role,
-                text: cleanedText,
-                sentenceId: subtitle.sentenceId,
-                end: subtitle.end,
-                updatedAt: Date.now(),
-            };
-
-            if (index === -1) return [...current, nextMessage].slice(-50);
-
-            const next = current.slice();
-            next[index] = nextMessage;
-            return next;
-        });
+        const parsed = parseSubtitleUpdate(role, subtitle, Date.now());
+        setMessages((current) => mergeSubtitleMessage(current, parsed.message));
+        return parsed.interviewComplete;
     }, []);
 
     // 移除当前 SDK 实例注册的所有事件监听。
@@ -363,12 +347,12 @@ const AliyunInterviewClient = ({
             };
             // AI 字幕可能是流式片段；稳定句中若出现完成标记，则延迟挂断，让最后一句播报完成。
             const onAgentSubtitle = (subtitle: AliyunSubtitle) => {
-                mergeSubtitle("assistant", subtitle);
+                const interviewComplete = mergeSubtitle("assistant", subtitle);
                 appendEvent(
                     `agentSubtitleNotify · ${subtitle.end ? "稳定句" : "流式更新"} #${subtitle.sentenceId}`,
                 );
 
-                if (subtitle.end && subtitle.text.includes("[INTERVIEW_COMPLETE]")) {
+                if (interviewComplete) {
                     appendEvent("检测到 [INTERVIEW_COMPLETE] · 准备优雅结束");
                     window.setTimeout(() => {
                         if (engineRef.current && !endingRef.current) {
