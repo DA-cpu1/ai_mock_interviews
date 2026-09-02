@@ -46,7 +46,8 @@ export type AiRealtimeSessionErrorCode =
     | "SESSION_NOT_FOUND"
     | "SESSION_EXPIRED"
     | "INVALID_SESSION_STATE"
-    | "SESSION_CREATE_FAILED";
+    | "SESSION_CREATE_FAILED"
+    | "SESSION_UPDATE_FAILED";
 
 // 创建实时会话时由客户端提交的业务参数。
 export interface AiRealtimeSessionRequest {
