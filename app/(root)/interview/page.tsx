@@ -1,8 +1,10 @@
-import React from 'react'
-import Agent from "@/components/Agent";
+import {getCurrentUser} from "@/lib/action/auth.action";
+import AliyunInterviewClient from "@/components/interview/AliyunInterviewClient";
 
-const Page = () => {
-    return <Agent userName="Sr" type="interview"/>;
+const Page = async () => {
+    const currentUser = await getCurrentUser();
+
+    return <AliyunInterviewClient userName={currentUser?.name || "Sr"} variant="interview" />;
 };
 
-export default Page
+export default Page;
