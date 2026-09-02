@@ -4,7 +4,8 @@
 适用仓库：`F:/interview-prep`  
 当前技术栈：Next.js 16.3.1、React 19.2.8、TypeScript、Firebase Authentication / Firestore
 
-> 本文是一份可以直接拆任务开工的实施计划。默认业务是“个人 AI 模拟面试练习”，首期为桌面浏览器纯语音面试；若实际用途是正式招聘、考试或强防作弊场景，必须执行第 4 节的高可信架构切换。
+> 本文是一份可以直接拆任务开工的实施计划。默认业务是“个人 AI 模拟面试练习”，首期为桌面浏览器纯语音面试；若实际用途是正式招聘、考试或强防作弊场景，必须执行第
+> 4 节的高可信架构切换。
 
 ## 1. 最终建议
 
@@ -20,14 +21,14 @@
 
 ## 2. 已核实的项目基线
 
-| 位置 | 当前情况 | 实施影响 |
-| --- | --- | --- |
-| `package.json` | 没有 RTC、语音或 AI SDK 依赖 | 可直接引入 AICallKit，不存在旧链路迁移 |
-| `components/Agent.tsx` | 已有 `messages`、`isSpeaking`、`onCall`、`onDisconnect` | 视觉组件可复用，但通话状态必须改为由真实 SDK 事件驱动 |
-| `app/(root)/interview/page.tsx` | 固定用户名 `Sr`，没有真实面试和用户数据 | 改为服务端读取当前用户和 `interviewId`，再传给客户端会话容器 |
-| `types/index.d.ts` | 已有 `Interview`、`Feedback`、`feedbackSchema` | 可扩展实时会话与字幕类型，反馈结构继续复用 |
-| Firebase | 已有服务端 Session Cookie 验证与 Firestore | Token 接口、回调入库、会话归属校验可沿用 |
-| Next.js 16.3.1 | Route Handler 适合短请求，不应承担常驻 WebSocket | 本方案不新增 Next.js 音频长连接，能兼容常见 serverless 部署 |
+| 位置                            | 当前情况                                                | 实施影响                                                     |
+|---------------------------------|---------------------------------------------------------|--------------------------------------------------------------|
+| `package.json`                  | 没有 RTC、语音或 AI SDK 依赖                            | 可直接引入 AICallKit，不存在旧链路迁移                       |
+| `components/Agent.tsx`          | 已有 `messages`、`isSpeaking`、`onCall`、`onDisconnect` | 视觉组件可复用，但通话状态必须改为由真实 SDK 事件驱动        |
+| `app/(root)/interview/page.tsx` | 固定用户名 `Sr`，没有真实面试和用户数据                 | 改为服务端读取当前用户和 `interviewId`，再传给客户端会话容器 |
+| `types/index.d.ts`              | 已有 `Interview`、`Feedback`、`feedbackSchema`          | 可扩展实时会话与字幕类型，反馈结构继续复用                   |
+| Firebase                        | 已有服务端 Session Cookie 验证与 Firestore              | Token 接口、回调入库、会话归属校验可沿用                     |
+| Next.js 16.3.1                  | Route Handler 适合短请求，不应承担常驻 WebSocket        | 本方案不新增 Next.js 音频长连接，能兼容常见 serverless 部署  |
 
 当前 `Agent.tsx` 有两个生产问题需要在接入时一起修复：
 
@@ -38,19 +39,19 @@
 
 以下默认值可以让团队不等待额外产品讨论，直接启动 P0：
 
-| 项目 | 首期默认值 |
-| --- | --- |
-| 使用场景 | 个人面试练习，不用于正式录用决策 |
-| 交互形式 | 桌面 Chrome / Edge 的纯语音面试 |
-| 语言 | 普通话为主，支持中英技术词，`zh_en` |
-| 对话模式 | 自然对话 + 语义断句；“我说完了/回答完毕”作为兜底结束词 |
-| STT | 阿里云系统预置，先用中英混合推荐模型做基线 |
-| LLM | IMS 工作流中的系统预置千问；通过每通 `llmSystemPrompt` 注入岗位、级别和问题 |
-| TTS | 系统预置 TTS / Qwen3-TTS，使用系统音色 |
-| 数据保存 | 保存权威文本转录和反馈，不保存音频 |
-| 会话限制 | 单用户仅 1 通活跃会话；单通最多 30 分钟；默认每日最多 5 通 |
-| 地域 | 中国内地用户优先选择与部署、Firestore 网络路径匹配的同一内地域；P0 可先用现有账号可用地域 |
-| 非首期 | 数字人、摄像头、VCR 防作弊、声纹、声音克隆、移动端专项适配、电话呼入呼出 |
+| 项目     | 首期默认值                                                                                |
+|----------|-------------------------------------------------------------------------------------------|
+| 使用场景 | 个人面试练习，不用于正式录用决策                                                          |
+| 交互形式 | 桌面 Chrome / Edge 的纯语音面试                                                           |
+| 语言     | 普通话为主，支持中英技术词，`zh_en`                                                       |
+| 对话模式 | 自然对话 + 语义断句；“我说完了/回答完毕”作为兜底结束词                                    |
+| STT      | 阿里云系统预置，先用中英混合推荐模型做基线                                                |
+| LLM      | IMS 工作流中的系统预置千问；通过每通 `llmSystemPrompt` 注入岗位、级别和问题               |
+| TTS      | 系统预置 TTS / Qwen3-TTS，使用系统音色                                                    |
+| 数据保存 | 保存权威文本转录和反馈，不保存音频                                                        |
+| 会话限制 | 单用户仅 1 通活跃会话；单通最多 30 分钟；默认每日最多 5 通                                |
+| 地域     | 中国内地用户优先选择与部署、Firestore 网络路径匹配的同一内地域；P0 可先用现有账号可用地域 |
+| 非首期   | 数字人、摄像头、VCR 防作弊、声纹、声音克隆、移动端专项适配、电话呼入呼出                  |
 
 ## 4. `$grill-me` 审查后的关键决策门
 
@@ -68,7 +69,8 @@
 
 ### 4.2 纯语音还是视频防作弊
 
-首期选择 `VoiceAgent`。如果目标是防作弊，不能只打开摄像头；需要另立二期，采用 `VisionAgent` / `VideoAgent`，明确用户授权、画面检测规则、误报申诉、录像留存和隐私合规。视频价格也明显高于纯音频。
+首期选择 `VoiceAgent`。如果目标是防作弊，不能只打开摄像头；需要另立二期，采用 `VisionAgent` / `VideoAgent`
+，明确用户授权、画面检测规则、误报申诉、录像留存和隐私合规。视频价格也明显高于纯音频。
 
 ### 4.3 自然对话还是对讲机
 
@@ -131,11 +133,11 @@ Browser / InterviewSession (Client Component)
 
 这里必须区分三种看起来相似、用途却不同的数据：
 
-| 数据 | 来源 | 是否持久化 | 用途 |
-| --- | --- | --- | --- |
-| 实时字幕 | 浏览器 SDK 的 `userSubtitleNotify`、`agentSubtitleNotify` | 不把每次临时变化写数据库 | 让用户在通话页面立即看到自己和 AI 正在说什么 |
-| 最终对话文本 | 阿里云服务端 `chat_record` 回调；必要时用 `CallLogUrl` 补齐 | 是，写入 Firestore | 保存完整面试记录，作为反馈评级的权威输入 |
-| 反馈评级 | 面试结束后读取最终对话文本，再调用反馈模型 | 是，写入现有 Feedback 结构 | 生成总分、分类分数、优势、改进项和总结 |
+| 数据         | 来源                                                        | 是否持久化                 | 用途                                         |
+|--------------|-------------------------------------------------------------|----------------------------|----------------------------------------------|
+| 实时字幕     | 浏览器 SDK 的 `userSubtitleNotify`、`agentSubtitleNotify`   | 不把每次临时变化写数据库   | 让用户在通话页面立即看到自己和 AI 正在说什么 |
+| 最终对话文本 | 阿里云服务端 `chat_record` 回调；必要时用 `CallLogUrl` 补齐 | 是，写入 Firestore         | 保存完整面试记录，作为反馈评级的权威输入     |
+| 反馈评级     | 面试结束后读取最终对话文本，再调用反馈模型                  | 是，写入现有 Feedback 结构 | 生成总分、分类分数、优势、改进项和总结       |
 
 完整流程是：
 
@@ -146,7 +148,7 @@ Browser / InterviewSession (Client Component)
                                   └─ 面试结束 → feedbackSchema → 反馈评级
 ```
 
-因此，“不保存语音”只表示不保存原始 WAV、RTC 录音或 OSS 音频文件，**仍然保存双方的对话文字**。否则无法稳定生成后续反馈。
+因此，“不保存语音”只表示不保存原始 WAV、RTC 录音或 OSS 音频文件， **仍然保存双方的对话文字**。否则无法稳定生成后续反馈。
 
 字幕实现规则：
 
@@ -166,7 +168,8 @@ Browser / InterviewSession (Client Component)
 4. 创建语音通话实时工作流。
 5. 创建 `VoiceAgent` 并绑定该工作流和 ARTC 应用。
 6. 记录 Agent ID、Region、RTC App ID、RTC App Key。
-7. 为生产创建最小权限 RAM 身份；如果首期仅由 AICallKit 客户端启动且 Next.js 本地生成 RTC Token，可以暂不引入 ICE OpenAPI AccessKey。
+7. 为生产创建最小权限 RAM 身份；如果首期仅由 AICallKit 客户端启动且 Next.js 本地生成 RTC Token，可以暂不引入 ICE OpenAPI
+   AccessKey。
 
 ### 6.2 工作流基线
 
@@ -321,7 +324,8 @@ idle
 
 ### 7.4 Token 生成
 
-官方提供 Node.js `crypto` 示例，可直接在 Next.js Node Runtime 的 `server-only` 模块实现，不需要为了 Token 单独部署 Java AppServer。
+官方提供 Node.js `crypto` 示例，可直接在 Next.js Node Runtime 的 `server-only` 模块实现，不需要为了 Token 单独部署 Java
+AppServer。
 
 要求：
 
@@ -351,29 +355,29 @@ idle
 
 ```ts
 interface InterviewSessionRecord {
-  id: string;
-  interviewId: string;
-  userId: string;
-  rtcUserId: string;
-  channelId: string;
-  agentId: string;
-  agentInstanceId?: string;
-  region: string;
-  status:
-    | "created"
-    | "connecting"
-    | "active"
-    | "ending"
-    | "completed"
-    | "failed";
-  conversationMode: "semantic" | "push_to_talk";
-  modelConfigVersion: string;
-  tokenExpiresAt: string;
-  startedAt?: string;
-  endedAt?: string;
-  lastEventAt?: string;
-  errorCode?: string;
-  feedbackId?: string;
+    id: string;
+    interviewId: string;
+    userId: string;
+    rtcUserId: string;
+    channelId: string;
+    agentId: string;
+    agentInstanceId?: string;
+    region: string;
+    status:
+        | "created"
+        | "connecting"
+        | "active"
+        | "ending"
+        | "completed"
+        | "failed";
+    conversationMode: "semantic" | "push_to_talk";
+    modelConfigVersion: string;
+    tokenExpiresAt: string;
+    startedAt?: string;
+    endedAt?: string;
+    lastEventAt?: string;
+    errorCode?: string;
+    feedbackId?: string;
 }
 ```
 
@@ -383,15 +387,15 @@ interface InterviewSessionRecord {
 
 ```ts
 interface TranscriptMessage {
-  eventKey: string;
-  role: "user" | "assistant";
-  text: string;
-  sentenceId?: number;
-  dialogueId?: string;
-  roundId?: string;
-  source: "aliyun_callback" | "aliyun_call_log";
-  occurredAt: string;
-  receivedAt: string;
+    eventKey: string;
+    role: "user" | "assistant";
+    text: string;
+    sentenceId?: number;
+    dialogueId?: string;
+    roundId?: string;
+    source: "aliyun_callback" | "aliyun_call_log";
+    occurredAt: string;
+    receivedAt: string;
 }
 ```
 
@@ -423,13 +427,13 @@ interface TranscriptMessage {
 
 这里的 `AI SDK` 按 Vercel AI SDK 理解。
 
-| 场景 | 是否使用 | 原因 |
-| --- | --- | --- |
-| RTC、麦克风、AI 音频 | 否 | AI SDK 不管理 WebRTC 或 AICallKit |
-| 实时字幕、智能断句、打断 | 否 | 这些是 IMS/AICallKit 事件与能力 |
-| 实时面试 LLM | 首期否 | LLM 已由 IMS 实时工作流管理，再套一层会增加状态源和故障点 |
-| 面试后结构化反馈 | 待定 | AI SDK 可通过 OpenAI-compatible provider 统一 Qwen/其他模型，并配合 Zod；但当前只有单一 Qwen 时直接调用也足够 |
-| 多供应商切换、fallback、工具调用 | 是，出现需求后再加 | 这是 AI SDK 真正有价值的部分 |
+| 场景                             | 是否使用           | 原因                                                                                                          |
+|----------------------------------|--------------------|---------------------------------------------------------------------------------------------------------------|
+| RTC、麦克风、AI 音频             | 否                 | AI SDK 不管理 WebRTC 或 AICallKit                                                                             |
+| 实时字幕、智能断句、打断         | 否                 | 这些是 IMS/AICallKit 事件与能力                                                                               |
+| 实时面试 LLM                     | 首期否             | LLM 已由 IMS 实时工作流管理，再套一层会增加状态源和故障点                                                     |
+| 面试后结构化反馈                 | 待定               | AI SDK 可通过 OpenAI-compatible provider 统一 Qwen/其他模型，并配合 Zod；但当前只有单一 Qwen 时直接调用也足够 |
+| 多供应商切换、fallback、工具调用 | 是，出现需求后再加 | 这是 AI SDK 真正有价值的部分                                                                                  |
 
 决策规则：满足以下任一条件才引入 AI SDK。
 
@@ -437,7 +441,8 @@ interface TranscriptMessage {
 2. 反馈生成要使用工具调用或统一流式 UI。
 3. 项目出现两个以上服务端 AI 功能，需要一个稳定 Provider 层。
 
-如果决定引入，只安装 `ai` 和 `@ai-sdk/openai-compatible`，放在 `lib/feedback/provider.server.ts`，使用百炼 OpenAI-compatible endpoint；不要启用 Vercel AI Gateway，除非已明确接受模型请求经过另一服务商。
+如果决定引入，只安装 `ai` 和 `@ai-sdk/openai-compatible`，放在 `lib/feedback/provider.server.ts`，使用百炼
+OpenAI-compatible endpoint；不要启用 Vercel AI Gateway，除非已明确接受模型请求经过另一服务商。
 
 即使采用 AI SDK，也继续在服务端用现有 `feedbackSchema` 做最终校验和重试，不能直接信任模型 JSON。
 
@@ -452,7 +457,8 @@ interface TranscriptMessage {
 - 开通服务并创建最小 VoiceAgent。
 - 只在本地使用控制台体验 `shareToken` 跑通官方示例；严禁用于生产。
 - 在独立测试页安装并动态导入 `aliyun-auikit-aicall`。
-- 分别验证 Next.js 16 默认 Turbopack 的 `dev/build`；阿里云当前只明确声明 Webpack 5 或 Vite，若 Turbopack 不兼容，再用 `next dev --webpack`、`next build --webpack` 做受控回退。
+- 分别验证 Next.js 16 默认 Turbopack 的 `dev/build`；阿里云当前只明确声明 Webpack 5 或 Vite，若 Turbopack 不兼容，再用
+  `next dev --webpack`、`next build --webpack` 做受控回退。
 - 验证 Chrome / Edge：接通、字幕、状态、手动打断、自然打断、结束与资源释放。
 - 记录实际 npm 版本、包体积、TypeScript 类型和事件签名。
 - 解决官方文档里的方法命名冲突：部分页面写 `handup()`，示例又写 `hangup()`；以已安装包的类型声明和编译结果为唯一依据。
@@ -463,7 +469,8 @@ interface TranscriptMessage {
 - 刷新/关闭页面后资源能释放；若未主动挂断，记录厂商约 90 秒才退出的计费风险。
 - 用户和 AI 双方字幕均能获取。
 - 明确 SDK 是否可在 Next.js 16 + React 19 客户端组件中正常构建。
-- 默认 Turbopack 能正常构建；若只能用 Webpack，已记录原因、构建命令和对项目开发体验的影响后再修改 `package.json`，不能先入为主切换整个项目。
+- 默认 Turbopack 能正常构建；若只能用 Webpack，已记录原因、构建命令和对项目开发体验的影响后再修改 `package.json`
+  ，不能先入为主切换整个项目。
 
 不通过则停止后续开发，回到“自建语音网关”备选路线。
 
@@ -553,26 +560,26 @@ interface TranscriptMessage {
 - 可在不发版的情况下关闭新会话创建。
 - 已演练 SDK 故障、回调故障和账单异常的回滚路径。
 
-预计总工程量：**8–10 个工程日**。账号未开通、Region 资源不可用、SDK 与 React 19 构建不兼容、正式招聘安全升级均不包含在该估算内。
+预计总工程量： **8–10 个工程日**。账号未开通、Region 资源不可用、SDK 与 React 19 构建不兼容、正式招聘安全升级均不包含在该估算内。
 
 ## 12. 验收指标
 
 这些是项目验收目标，不是厂商承诺：
 
-| 指标 | MVP 门槛 |
-| --- | --- |
-| 呼叫成功率 | 测试环境连续 100 通 ≥ 98% |
-| 首次接通 | 点击 Call 到 `callBegin` 的 P95 ≤ 5 秒 |
-| 字幕延迟 | 用户说完到稳定字幕 P95 ≤ 1.5 秒 |
-| AI 首音 | 稳定用户句结束到 AI 首音 P95 ≤ 3 秒 |
-| 技术词识别 | 50 句中英技术语料关键术语准确率 ≥ 90% |
-| 误断 | 含 2–5 秒思考停顿语料的提前抢话率 ≤ 10% |
-| 打断 | 手动打断到停止 AI 播放 P95 ≤ 500 ms |
-| 幂等 | 重复 Call、End、callback、finalize 不产生重复会话/消息/反馈 |
-| 清理 | 正常 End 后 3 秒内进入 ended，并释放引擎 |
-| 安全 | 客户端产物与网络响应中不存在 App Key、AccessKey Secret、回调 Token |
-| 归档 | 完成会话的权威 transcript 可用率 ≥ 99% |
-| 反馈 | transcript 就绪后反馈 P95 ≤ 20 秒 |
+| 指标       | MVP 门槛                                                           |
+|------------|--------------------------------------------------------------------|
+| 呼叫成功率 | 测试环境连续 100 通 ≥ 98%                                          |
+| 首次接通   | 点击 Call 到 `callBegin` 的 P95 ≤ 5 秒                             |
+| 字幕延迟   | 用户说完到稳定字幕 P95 ≤ 1.5 秒                                    |
+| AI 首音    | 稳定用户句结束到 AI 首音 P95 ≤ 3 秒                                |
+| 技术词识别 | 50 句中英技术语料关键术语准确率 ≥ 90%                              |
+| 误断       | 含 2–5 秒思考停顿语料的提前抢话率 ≤ 10%                            |
+| 打断       | 手动打断到停止 AI 播放 P95 ≤ 500 ms                                |
+| 幂等       | 重复 Call、End、callback、finalize 不产生重复会话/消息/反馈        |
+| 清理       | 正常 End 后 3 秒内进入 ended，并释放引擎                           |
+| 安全       | 客户端产物与网络响应中不存在 App Key、AccessKey Secret、回调 Token |
+| 归档       | 完成会话的权威 transcript 可用率 ≥ 99%                             |
+| 反馈       | transcript 就绪后反馈 P95 ≤ 20 秒                                  |
 
 ## 13. 测试矩阵
 
@@ -696,7 +703,7 @@ P3 上线前必须拿到：
 
 - [阿里云 AI 实时互动概览](https://help.aliyun.com/zh/ims/user-guide/real-time-conversational-ai-overview)
 - [音视频通话快速入门](https://help.aliyun.com/zh/ims/user-guide/create-agents-for-audio-and-video-calls)
-- [AICallKit Web 集成概览](https://help.aliyun.com/zh/ims/user-guide/integration-overview-2)
+- [AICallKit Web 集成概览](app/ (root)/interview/page.tsxhttps://help.aliyun.com/zh/ims/user-guide/integration-overview-2)
 - [AICallKit Web API](https://help.aliyun.com/zh/ims/user-guide/web-usage-guide-2)
 - [AICallKit Web 数据结构](https://help.aliyun.com/zh/ims/user-guide/data-structure-3)
 - [ARTC Token 鉴权与 Node.js 示例](https://help.aliyun.com/zh/ims/developer-reference/token-based-authentication)
