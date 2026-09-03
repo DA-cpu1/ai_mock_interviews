@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
+import AliyunTranscriptPanel from "@/components/interview/AliyunTranscriptPanel";
 import {
     mergeSubtitleMessage,
     parseSubtitleUpdate,
@@ -159,8 +160,6 @@ const AliyunInterviewClient = ({
     const removeListenersRef = useRef<(() => void) | null>(null);
     // 让同一毫秒内生成的日志也拥有唯一 id。
     const eventSequenceRef = useRef(0);
-    // 用于字幕区域自动滚动到底部。
-    const transcriptRef = useRef<HTMLDivElement | null>(null);
 
     // 在诊断面板头部插入一条最新事件，并限制日志数量。
     const appendEvent = useCallback((text: string) => {
@@ -593,15 +592,6 @@ const AliyunInterviewClient = ({
         setMessages([]);
     }, []);
 
-    // 新字幕到来后自动滚动到最新内容。
-    useEffect(() => {
-        const transcriptElement = transcriptRef.current;
-
-        if (transcriptElement) {
-            transcriptElement.scrollTop = transcriptElement.scrollHeight;
-        }
-    }, [messages]);
-
     // 处理页面刷新、关闭和组件卸载，避免 RTC 通话或麦克风资源残留。
     useEffect(() => {
         mountedRef.current = true;
@@ -643,13 +633,11 @@ const AliyunInterviewClient = ({
     const isTestPage = variant === "test";
     const statusLabel = STATUS_LABELS[callStatus];
     const agentStateLabel = AGENT_STATE_LABELS[agentState];
-    const subtitleCountLabel = `${messages.length.toString().padStart(2, "0")} 条`;
-
-    const transcriptHint = useMemo(() => {
-        if (messages.length > 0) return "字幕会按 sentenceId 更新，不会重复堆叠流式片段";
-        if (isActive) return "等待你或 AI 的第一句稳定字幕…";
-        return "点击呼叫后，这里会显示用户与 AI 的实时字幕";
-    }, [isActive, messages.length]);
+    const transcriptHint = messages.length > 0
+        ? "字幕会按 sentenceId 更新，不会重复堆叠流式片段"
+        : isActive
+            ? "等待你或 AI 的第一句稳定字幕…"
+            : "点击呼叫后，这里会显示用户与 AI 的实时字幕";
 
     return (
         <main className={styles.page}>
@@ -682,7 +670,9 @@ const AliyunInterviewClient = ({
 
             {/* 主控制台：左侧为通话控制，右侧为双方实时字幕。 */}
             <section className={styles.consoleGrid} aria-label="阿里云实时互动测试台">
-                <article className={styles.stageCard}>
+                {/* 高频字幕只更新右侧面板；左侧节点仅在自身通话状态变化时重新计算。 */}
+                {useMemo(() => (
+                    <article className={styles.stageCard}>
                     <div className={styles.cardTopline}>
                         <div className={styles.cardKicker}>
                             <Radio size={15}/>
@@ -815,47 +805,28 @@ const AliyunInterviewClient = ({
                             </button>
                         )}
                     </div>
-                </article>
+                    </article>
+                ), [
+                    agentStarted,
+                    agentStateLabel,
+                    callStatus,
+                    endCall,
+                    errorMessage,
+                    interruptAgent,
+                    isActive,
+                    isAgentAudioMuted,
+                    isConnecting,
+                    isEnding,
+                    isMuted,
+                    isSpeaking,
+                    startCall,
+                    statusLabel,
+                    toggleAgentAudio,
+                    toggleMute,
+                    userName,
+                ])}
 
-                {/* 实时字幕面板：同时显示候选人和 AI 的流式/稳定字幕。 */}
-                <aside className={styles.transcriptCard}>
-                    <div className={styles.cardTopline}>
-                        <div className={styles.cardKicker}>
-                            <Sparkles size={15}/>
-                            <span>LIVE TRANSCRIPT</span>
-                        </div>
-                        <span className={styles.countLabel}>{subtitleCountLabel}</span>
-                    </div>
-
-                    <div className={styles.transcriptBody} ref={transcriptRef} aria-live="polite">
-                        {messages.length === 0 ? (
-                            <div className={styles.emptyTranscript}>
-                                <div className={styles.emptyIcon}>
-                                    <Volume2 size={22}/>
-                                </div>
-                                <p>{transcriptHint}</p>
-                            </div>
-                        ) : (
-                            messages.map((message) => (
-                                <div
-                                    className={`${styles.message} ${message.role === "user" ? styles.messageUser : styles.messageAssistant}`}
-                                    key={message.id}
-                                >
-                                    <div className={styles.messageHeader}>
-                                        <span>{message.role === "user" ? "你" : "AI INTERVIEWER"}</span>
-                                        <span>{message.end ? "STABLE" : "LIVE"}</span>
-                                    </div>
-                                    <p>{message.text}</p>
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                    <div className={styles.transcriptFooter}>
-                        <span className={styles.footerSignal}/>
-                        <span>流式字幕仅用于即时显示</span>
-                    </div>
-                </aside>
+                <AliyunTranscriptPanel messages={messages} hint={transcriptHint}/>
             </section>
 
             {/* 三项固定说明：SDK 数据链路、音频采集范围和当前可观测状态。 */}

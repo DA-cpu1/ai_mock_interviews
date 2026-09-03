@@ -13,6 +13,7 @@
     position: relative;
     isolation: isolate;
     min-height: calc(100vh - 9rem);
+    overflow-x: clip;
     padding: 0.5rem 0 2rem;
     color: var(--console-text);
 }
@@ -148,6 +149,7 @@
 }
 
 .transcriptCard {
+    contain: size;
     display: flex;
     min-height: 34rem;
     flex-direction: column;
@@ -578,6 +580,7 @@
 }
 
 .message {
+    min-width: 0;
     padding: 0.8rem 0.85rem;
     border: 1px solid var(--console-line);
     border-radius: 0.7rem;
@@ -618,6 +621,7 @@
     color: var(--console-text);
     font-size: 0.84rem;
     line-height: 1.65;
+    overflow-wrap: anywhere;
 }
 
 .transcriptFooter {
@@ -852,4 +856,3 @@
         padding: 1rem;
     }
 }
-
