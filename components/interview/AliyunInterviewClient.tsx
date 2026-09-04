@@ -117,7 +117,10 @@ const isSessionResponse = (value: unknown): value is AiRealtimeSessionResponse =
         payload.region &&
         payload.userJoinToken &&
         payload.expiresAt &&
-        payload.agentConfig,
+        payload.agentConfig &&
+        typeof payload.agentConfig.agentGreeting === "string" &&
+        typeof payload.agentConfig.wakeUpQuery === "string" &&
+        typeof payload.agentConfig.llmSystemPrompt === "string",
     );
 };
 
@@ -487,6 +490,9 @@ const AliyunInterviewClient = ({
             const agentConfig = new AICallAgentConfig();
             // 将服务端返回的智能体行为配置交给 AICallKit。
 
+            agentConfig.agentGreeting = payload.agentConfig.agentGreeting;
+            agentConfig.wakeUpQuery = payload.agentConfig.wakeUpQuery;
+            agentConfig.llmConfig.llmSystemPrompt = payload.agentConfig.llmSystemPrompt;
             // 最长空闲或会话相关时间，单位由 SDK 定义，此处服务端按秒下发
             agentConfig.agentMaxIdleTime = payload.agentConfig.agentMaxIdleTime;
             //启用智能语音分段，帮助判断一句话何时结束

@@ -17,7 +17,8 @@ interface Interview {
     id: string;
     role: string;
     level: string;
-    questions: string[];
+    questions?: string[];
+    questionMode?: "ai-generated" | "predefined";
     techstack: string[];
     createdAt: string;
     userId: string;
@@ -39,12 +40,11 @@ interface User {
 }
 
 interface InterviewCardProps {
-    interviewId?: string;
-    userId?: string;
+    interviewId: string;
     role: string;
     type: string;
     techstack: string[];
-    createdAt?: string;
+    createdAt: string;
 }
 
 interface AgentProps {

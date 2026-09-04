@@ -121,6 +121,12 @@ export interface AiRealtimeSubtitle {
 
 // 服务端下发给 AICallKit 的智能体行为配置。
 export interface AiRealtimeAgentConfig {
+    // 根据已保存岗位生成的本场欢迎语。
+    agentGreeting: string;
+    // 接通后要求智能体主动提出第一道问题。
+    wakeUpQuery: string;
+    // 根据岗位配置生成的本场 LLM 系统提示词。
+    llmSystemPrompt: string;
     // 智能体允许的最长空闲或会话时间，当前按秒传递。
     agentMaxIdleTime: number;
     // 是否启用智能语音分段，以判断一句话何时结束。

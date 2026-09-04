@@ -3,10 +3,12 @@ import {randomUUID} from "node:crypto";
 import {z} from "zod";
 
 import {getCurrentUser} from "@/lib/action/auth.action";
+import {buildInterviewAgentPrompt} from "@/lib/ai-realtime/interview-prompt";
 import {SessionCreationError} from "@/lib/ai-realtime/session-policy";
 import {createSessionWithActiveLock} from "@/lib/ai-realtime/session-store.server";
 import {AliyunConfigError, getAliyunRealtimeConfig} from "@/lib/aliyun/config.server";
 import {createArtcToken, createRtcUserId} from "@/lib/aliyun/rtc-token.server";
+import {getOwnedInterviewPromptContext} from "@/lib/interviews/interview-store.server";
 import type {
     AiRealtimeSessionErrorCode,
     AiRealtimeSessionRequest,
@@ -94,6 +96,24 @@ export async function POST(request: Request) {
         return jsonError(503, "REALTIME_DISABLED", "阿里云实时互动功能当前未开启。");
     }
 
+    let interviewContext;
+
+    try {
+        interviewContext = await getOwnedInterviewPromptContext(body.interviewId, currentUser.id);
+    } catch (error) {
+        console.error(
+            "[ai-realtime] failed to load interview context",
+            error instanceof Error ? error.name : "UnknownError",
+        );
+        return jsonError(500, "SESSION_CREATE_FAILED", "读取面试设置失败，请稍后重试。");
+    }
+
+    if (!interviewContext) {
+        return jsonError(404, "INTERVIEW_NOT_FOUND", "找不到这场面试。");
+    }
+
+    const interviewPrompt = buildInterviewAgentPrompt(interviewContext);
+
     // 每次请求都使用新的随机会话和频道；频道 ID 会被写入 Token，供 RTC 校验。
     const sessionId = randomUUID();
     const channelId = `prep_${sessionId.replaceAll("-", "")}`;
@@ -121,7 +141,7 @@ export async function POST(request: Request) {
         region: config.region,
         status: "created",
         conversationMode: "semantic",
-        modelConfigVersion: "voice-v1",
+        modelConfigVersion: "voice-v2-dynamic-questions",
         tokenExpiresAt: token.expiresAt,
         // 尚未接通时，Token 过期就自动释放占用，避免失败请求一直卡住用户。
         leaseExpiresAt: token.expiresAt,
@@ -161,6 +181,7 @@ export async function POST(request: Request) {
             userJoinToken: token.base64Token,
             expiresAt: token.expiresAt,
             agentConfig: {
+                ...interviewPrompt,
                 // AICallKit 使用秒，这里把环境变量中的分钟数转换成秒。
                 agentMaxIdleTime: config.maxSessionMinutes * 60,
                 enableIntelligentSegment: true,

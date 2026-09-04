@@ -1,13 +1,14 @@
-import dayjs from 'dayjs';
-import Image from "next/image"
-import {getRandomInterviewCover} from "@/lib/utils";
+import dayjs from "dayjs";
+import Image from "next/image";
 import Link from "next/link";
+
 import {Button} from "@/components/ui/button";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
+import {INTERVIEW_TEMPLATES} from "@/constants/interviews";
+import {getInterviewCover} from "@/lib/utils";
 
 const InterviewCard = ({
                            interviewId,
-                           userId,
                            role,
                            type,
                            techstack,
@@ -15,11 +16,10 @@ const InterviewCard = ({
                        }: InterviewCardProps) => {
     const feedback = null as Feedback | null;
 
-    const normalizedType = /mix/gi.test(type) ? 'Mixed' : type;
+    const normalizedType = INTERVIEW_TEMPLATES.find((template) => template.type === type)?.title
+        ?? type;
 
-    const formattedDate = dayjs(
-        feedback?.createdAt || createdAt || Date.now()
-    ).format('MMM D, YYYY');
+    const formattedDate = dayjs(feedback?.createdAt || createdAt).format("MMM D, YYYY");
 
     return (
         <div className="card-border w-[360px] max-sm:w-full min-h-96">
@@ -30,7 +30,7 @@ const InterviewCard = ({
                     </div>
 
                     <Image
-                        src={getRandomInterviewCover()}
+                        src={getInterviewCover(interviewId)}
                         alt="cover image"
                         width={90}
                         height={90}
@@ -39,7 +39,7 @@ const InterviewCard = ({
                 </div>
 
                 <h3 className="mt-5 capitalize">
-                    {role} Interview
+                    {role}面试
                 </h3>
 
                 <div className="flex flex-row gap-5 mt-3">
@@ -73,7 +73,7 @@ const InterviewCard = ({
                 <div className="flex flex-row justify-between">
                     <DisplayTechIcons techStack={techstack}/>
 
-                    <Button className="btn-primary">
+                    <Button asChild className="btn-primary">
                         <Link
                             href={
                                 feedback
@@ -81,7 +81,7 @@ const InterviewCard = ({
                                     : `/interview/${interviewId}`
                             }
                         >
-                            {feedback ? "查看反馈" : "查看面试"}
+                            {feedback ? "查看反馈" : "进入面试"}
                         </Link>
                     </Button>
                 </div>
