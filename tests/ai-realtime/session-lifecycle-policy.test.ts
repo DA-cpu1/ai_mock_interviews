@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {getSessionStartPlan} from "../../lib/ai-realtime/session-lifecycle-policy.ts";
+import {
+    getSessionEndPlan,
+    getSessionStartPlan,
+} from "../../lib/ai-realtime/session-lifecycle-policy.ts";
 import type {
     AiRealtimeSessionRecord,
     AiRealtimeSessionStatus,
@@ -64,4 +67,72 @@ test("rejects starting a session that has already completed", () => {
     assert.deepEqual(getSessionStartPlan(session("completed"), state(), NOW, 30), {
         kind: "invalid",
     });
+});
+
+test("records a normally completed interview with its first end time", () => {
+    assert.deepEqual(
+        getSessionEndPlan(session("active"), {
+            outcome: "completed",
+        }, "2026-09-02T10:05:00.000Z"),
+        {
+            status: "completed",
+            endOutcome: "completed",
+            endedAt: "2026-09-02T10:05:00.000Z",
+            leaseExpiresAt: "2026-09-02T10:05:00.000Z",
+            errorCode: null,
+        },
+    );
+});
+
+test("records a technical failure without persisting an SDK message", () => {
+    assert.deepEqual(
+        getSessionEndPlan(session("active"), {
+            outcome: "failed",
+            errorCode: "RTC_CONNECTION_FAILED",
+        }, "2026-09-02T10:04:00.000Z"),
+        {
+            status: "failed",
+            endOutcome: "failed",
+            endedAt: "2026-09-02T10:04:00.000Z",
+            leaseExpiresAt: "2026-09-02T10:04:00.000Z",
+            errorCode: "RTC_CONNECTION_FAILED",
+        },
+    );
+});
+
+test("a repeated end cannot overwrite the first failure or end time", () => {
+    const failedSession = {
+        ...session("failed"),
+        endOutcome: "failed" as const,
+        endedAt: "2026-09-02T10:03:00.000Z",
+        errorCode: "SDK_ERROR" as const,
+    };
+
+    assert.deepEqual(
+        getSessionEndPlan(failedSession, {
+            outcome: "completed",
+        }, "2026-09-02T10:06:00.000Z"),
+        {
+            status: "failed",
+            endOutcome: "failed",
+            endedAt: "2026-09-02T10:03:00.000Z",
+            leaseExpiresAt: "2026-09-02T10:06:00.000Z",
+            errorCode: "SDK_ERROR",
+        },
+    );
+});
+
+test("records an early user exit as completed but keeps its outcome", () => {
+    assert.deepEqual(
+        getSessionEndPlan(session("active"), {
+            outcome: "user_cancelled",
+        }, "2026-09-02T10:02:00.000Z"),
+        {
+            status: "completed",
+            endOutcome: "user_cancelled",
+            endedAt: "2026-09-02T10:02:00.000Z",
+            leaseExpiresAt: "2026-09-02T10:02:00.000Z",
+            errorCode: null,
+        },
+    );
 });

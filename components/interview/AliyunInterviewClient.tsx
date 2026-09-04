@@ -26,6 +26,8 @@ import {
 import type {
     AiRealtimeAgentState,
     AiRealtimeCallStatus,
+    AiRealtimeSessionEndErrorCode,
+    AiRealtimeSessionEndRequest,
     AiRealtimeSessionResponse,
     AiRealtimeSubtitle,
     AiRealtimeSubtitleRole,
@@ -82,6 +84,18 @@ const ERROR_MESSAGES: Record<number, string> = {
     [-10008]: "浏览器麦克风不可用或权限被拒绝。",
     [-10101]: "智能体已结束本次通话。",
     [-10204]: "找不到对应的 AI 智能体，请检查控制台配置。",
+};
+
+const toStableSdkErrorCode = (code: number): AiRealtimeSessionEndErrorCode => {
+    const codes: Record<number, AiRealtimeSessionEndErrorCode> = {
+        [-10000]: "AGENT_START_FAILED",
+        [-10001]: "RTC_CONNECTION_FAILED",
+        [-10004]: "RTC_TOKEN_EXPIRED",
+        [-10005]: "SESSION_REPLACED",
+        [-10008]: "MICROPHONE_UNAVAILABLE",
+        [-10204]: "AGENT_CONFIG_INVALID",
+    };
+    return codes[code] ?? "SDK_ERROR";
 };
 
 // 将未知类型的异常统一转换为可展示的错误文案。
@@ -147,6 +161,7 @@ const AliyunInterviewClient = ({
     const [eventLog, setEventLog] = useState<EventLogItem[]>([]);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [sessionInfo, setSessionInfo] = useState<AiRealtimeSessionResponse | null>(null);
+    const [feedbackSessionId, setFeedbackSessionId] = useState<string | null>(null);
 
     // ref 保存不会因为重新渲染而改变的通话对象、会话信息和并发控制标记。
     const engineRef = useRef<AliyunCallEngine | null>(null);
@@ -192,7 +207,10 @@ const AliyunInterviewClient = ({
     }, []);
 
     // 把 SDK 的接通和结束结果告诉服务端，让数据库里的会话状态保持一致。
-    const updateServerSession = useCallback(async (action: "start" | "end") => {
+    const updateServerSession = useCallback(async (
+        action: "start" | "end",
+        endRequest?: AiRealtimeSessionEndRequest,
+    ) => {
         const sessionId = sessionRef.current?.sessionId;
         if (!sessionId) return;
 
@@ -201,7 +219,7 @@ const AliyunInterviewClient = ({
             {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({}),
+                body: JSON.stringify(action === "end" ? endRequest : {}),
                 // 页面正在关闭时，也尽量把结束通知送到服务端。
                 keepalive: action === "end",
             },
@@ -215,22 +233,29 @@ const AliyunInterviewClient = ({
             throw new Error(message || `服务端返回 ${response.status}`);
         }
 
+        // SDK 清理后 sessionRef 会释放，但反馈必须继续使用本次已落库的 sessionId，
+        // 因此只在非技术失败的 end 成功后单独保留它。
+        if (action === "end" && endRequest?.outcome !== "failed" && mountedRef.current) {
+            setFeedbackSessionId(sessionId);
+        }
+
         appendEvent(action === "start" ? "服务端已记录通话开始" : "服务端已记录通话结束");
     }, [appendEvent]);
 
-    // 统一释放 SDK 资源。requestHangup=true 表示主动挂断，false 表示 SDK 已经因错误/结束而触发清理。
+    // 正常完成、用户提前结束和技术失败使用不同结果；清理过程只发送稳定分类。
     const cleanupEngine = useCallback(
-        async (finalStatus: "ended" | "error", requestHangup: boolean) => {
+        async (endRequest: AiRealtimeSessionEndRequest, requestHangup: boolean) => {
             if (cleanupPromiseRef.current) {
                 await cleanupPromiseRef.current;
                 return;
             }
 
             const engine = engineRef.current;
+            const finalStatus = endRequest.outcome === "failed" ? "error" : "ended";
 
             if (!engine) {
                 try {
-                    await updateServerSession("end");
+                    await updateServerSession("end", endRequest);
                 } catch (error) {
                     appendEvent(`结束状态未能保存：${toErrorMessage(error)}`);
                 }
@@ -262,7 +287,7 @@ const AliyunInterviewClient = ({
                     }
                 } finally {
                     try {
-                        await updateServerSession("end");
+                        await updateServerSession("end", endRequest);
                     } catch (error) {
                         appendEvent(`结束状态未能保存：${toErrorMessage(error)}`);
                     }
@@ -304,11 +329,21 @@ const AliyunInterviewClient = ({
         (code: number, message: string) => {
             const friendlyMessage = ERROR_MESSAGES[code] ?? message ?? `SDK 错误码：${code}`;
 
+            // AICallKit 的 AgentLeaveChannel 表示智能体主动正常收尾，不是技术故障。
+            if (code === -10101) {
+                appendEvent(`SDK 通知正常结束 ${code}：${friendlyMessage}`);
+                if (!endingRef.current) void cleanupEngine({outcome: "completed"}, false);
+                return;
+            }
+
             setErrorMessage(friendlyMessage);
             appendEvent(`SDK 错误 ${code}：${friendlyMessage}`);
 
             if (!endingRef.current) {
-                void cleanupEngine("error", false);
+                void cleanupEngine({
+                    outcome: "failed",
+                    errorCode: toStableSdkErrorCode(code),
+                }, false);
             }
         },
         [appendEvent, cleanupEngine],
@@ -328,14 +363,17 @@ const AliyunInterviewClient = ({
                         const message = toErrorMessage(error);
                         if (mountedRef.current) setErrorMessage(message);
                         appendEvent(`开始状态未能保存：${message}`);
-                        if (!endingRef.current) void cleanupEngine("error", true);
+                        if (!endingRef.current) void cleanupEngine({
+                            outcome: "failed",
+                            errorCode: "SESSION_START_FAILED",
+                        }, true);
                     });
             };
             const onCallEnd = () => {
                 appendEvent("callEnd · SDK 通知通话结束");
 
                 if (!endingRef.current) {
-                    void cleanupEngine("ended", false);
+                    void cleanupEngine({outcome: "completed"}, false);
                 }
             };
             const onAgentStarted = () => {
@@ -358,7 +396,7 @@ const AliyunInterviewClient = ({
                     appendEvent("检测到 [INTERVIEW_COMPLETE] · 准备优雅结束");
                     window.setTimeout(() => {
                         if (engineRef.current && !endingRef.current) {
-                            void cleanupEngine("ended", true);
+                            void cleanupEngine({outcome: "completed"}, true);
                         }
                     }, 1200);
                 }
@@ -434,6 +472,7 @@ const AliyunInterviewClient = ({
         setMessages([]);
         setEventLog([]);
         setSessionInfo(null);
+        setFeedbackSessionId(null);
         setAgentState("idle");
         setAgentStarted(false);
         setCallStatus("requesting_permission");
@@ -526,7 +565,10 @@ const AliyunInterviewClient = ({
             appendEvent(`启动失败 · ${message}`);
 
             if (sessionRef.current && !endingRef.current) {
-                await cleanupEngine("error", false);
+                await cleanupEngine({
+                    outcome: "failed",
+                    errorCode: "SESSION_START_FAILED",
+                }, false);
             } else {
                 setCallStatus("error");
             }
@@ -540,7 +582,7 @@ const AliyunInterviewClient = ({
         if (!engineRef.current || endingRef.current) return;
 
         appendEvent("用户请求挂断");
-        void cleanupEngine("ended", true);
+        void cleanupEngine({outcome: "user_cancelled"}, true);
     }, [appendEvent, cleanupEngine]);
 
     // 切换候选人的麦克风状态。
@@ -593,6 +635,7 @@ const AliyunInterviewClient = ({
 
         setErrorMessage(null);
         setSessionInfo(null);
+        setFeedbackSessionId(null);
         setCallStatus("idle");
         setEventLog([]);
         setMessages([]);
@@ -608,7 +651,7 @@ const AliyunInterviewClient = ({
             if ((!engine && !sessionRef.current) || endingRef.current) return;
 
             endingRef.current = true;
-            void updateServerSession("end").catch(() => undefined);
+            void updateServerSession("end", {outcome: "user_cancelled"}).catch(() => undefined);
             if (engine) void engine.handup().catch(() => engine.destroy());
         };
 
@@ -622,7 +665,7 @@ const AliyunInterviewClient = ({
 
             if ((engine || sessionRef.current) && !endingRef.current) {
                 endingRef.current = true;
-                void updateServerSession("end").catch(() => undefined);
+                void updateServerSession("end", {outcome: "user_cancelled"}).catch(() => undefined);
                 if (engine) void engine.handup().catch(() => engine.destroy());
             }
         };
@@ -834,6 +877,13 @@ const AliyunInterviewClient = ({
 
                 <AliyunTranscriptPanel messages={messages} hint={transcriptHint}/>
             </section>
+
+            {!isTestPage && callStatus === "ended" && feedbackSessionId ? (
+                <p className={styles.completionNotice} role="status">
+                    本次面试已保存
+                    <span>SESSION {feedbackSessionId.slice(0, 8)}</span>
+                </p>
+            ) : null}
 
             {/* 三项固定说明：SDK 数据链路、音频采集范围和当前可观测状态。 */}
             <section className={styles.bottomGrid}>

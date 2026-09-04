@@ -2,12 +2,13 @@ import "server-only";
 
 import {db} from "@/firebase/admin";
 import type {
+    AiRealtimeSessionEndRequest,
     AiRealtimeSessionErrorCode,
     AiRealtimeSessionRecord,
     AiRealtimeUserSessionState,
 } from "@/types/ai-realtime";
 
-import {getSessionStartPlan} from "./session-lifecycle-policy";
+import {getSessionEndPlan, getSessionStartPlan} from "./session-lifecycle-policy";
 
 type LifecycleAction = "start" | "end";
 
@@ -25,6 +26,7 @@ interface UpdateSessionInput {
     userId: string;
     action: LifecycleAction;
     maxSessionMinutes: number;
+    endRequest?: AiRealtimeSessionEndRequest;
     now?: Date;
 }
 // 在同一个事务里更新会话和用户锁，避免一个成功、另一个失败。
@@ -33,6 +35,7 @@ export const updateSessionLifecycle = async ({
     userId,
     action,
     maxSessionMinutes,
+    endRequest,
     now = new Date(),
 }: UpdateSessionInput): Promise<void> => {
     const sessionRef = db.collection("interviewSessions").doc(sessionId);
@@ -78,12 +81,10 @@ export const updateSessionLifecycle = async ({
             return null;
         }
 
-        // 结束操作可以重复调用；只有仍指向本会话的锁才会被释放。
-        transaction.update(sessionRef, {
-            status: session.status === "failed" ? "failed" : "completed",
-            endedAt: session.endedAt ?? nowIso,
-            leaseExpiresAt: nowIso,
-        });
+        if (!endRequest) throw new SessionLifecycleError("INVALID_SESSION_STATE");
+
+        const endPlan = getSessionEndPlan(session, endRequest, nowIso);
+        transaction.update(sessionRef, endPlan);
         if (state?.activeSessionId === sessionId) {
             transaction.update(stateRef, {activeSessionId: null, leaseExpiresAt: null});
         }

@@ -34,6 +34,25 @@ export type AiRealtimeSessionStatus =
     // 会话因异常而失败。
     | "failed";
 
+// 浏览器提交的稳定结束语义；后续结束路径只允许使用这里的白名单值。
+export type AiRealtimeSessionEndOutcome = "completed" | "user_cancelled" | "failed";
+
+// 不保存 SDK 原始数字码或错误消息，只持久化可长期兼容的业务分类。
+export type AiRealtimeSessionEndErrorCode =
+    | "AGENT_START_FAILED"
+    | "RTC_CONNECTION_FAILED"
+    | "RTC_TOKEN_EXPIRED"
+    | "SESSION_REPLACED"
+    | "MICROPHONE_UNAVAILABLE"
+    | "AGENT_CONFIG_INVALID"
+    | "SESSION_START_FAILED"
+    | "SDK_ERROR";
+
+export type AiRealtimeSessionEndRequest =
+    | {outcome: "completed"}
+    | {outcome: "user_cancelled"}
+    | {outcome: "failed"; errorCode: AiRealtimeSessionEndErrorCode};
+
 // 创建或操作实时会话时，服务端可能返回的业务错误码。
 export type AiRealtimeSessionErrorCode =
     | "INVALID_REQUEST"
@@ -87,8 +106,10 @@ export interface AiRealtimeSessionRecord {
     startedAt?: string;
     // 会话结束时间，未结束时不存在。
     endedAt?: string;
+    // 首次有效结束请求的业务结果，用于区分不同结束路径。
+    endOutcome?: AiRealtimeSessionEndOutcome;
     // 会话失败时记录的错误码。
-    errorCode?: string;
+    errorCode?: AiRealtimeSessionErrorCode | AiRealtimeSessionEndErrorCode;
 }
 
 // 用户维度的实时会话占用状态，用于限制同一用户重复创建活动会话。

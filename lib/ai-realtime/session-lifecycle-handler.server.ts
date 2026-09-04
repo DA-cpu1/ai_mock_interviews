@@ -4,12 +4,32 @@ import {z} from "zod";
 
 import {getCurrentUser} from "@/lib/action/auth.action";
 import {AliyunConfigError, getAliyunRealtimeConfig} from "@/lib/aliyun/config.server";
-import type {AiRealtimeSessionErrorCode} from "@/types/ai-realtime";
+import type {
+    AiRealtimeSessionEndRequest,
+    AiRealtimeSessionErrorCode,
+} from "@/types/ai-realtime";
 
 import {SessionLifecycleError, updateSessionLifecycle} from "./session-lifecycle.server";
 
 type LifecycleAction = "start" | "end";
 const emptyBodySchema = z.object({}).strict();
+const endBodySchema = z.discriminatedUnion("outcome", [
+    z.object({outcome: z.literal("completed")}).strict(),
+    z.object({outcome: z.literal("user_cancelled")}).strict(),
+    z.object({
+        outcome: z.literal("failed"),
+        errorCode: z.enum([
+            "AGENT_START_FAILED",
+            "RTC_CONNECTION_FAILED",
+            "RTC_TOKEN_EXPIRED",
+            "SESSION_REPLACED",
+            "MICROPHONE_UNAVAILABLE",
+            "AGENT_CONFIG_INVALID",
+            "SESSION_START_FAILED",
+            "SDK_ERROR",
+        ]),
+    }).strict(),
+]);
 const sessionIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 
 const jsonError = (status: number, code: AiRealtimeSessionErrorCode, message: string) =>
@@ -18,18 +38,25 @@ const jsonError = (status: number, code: AiRealtimeSessionErrorCode, message: st
         {status, headers: {"Cache-Control": "no-store"}},
     );
 
-// 开始和结束接口都不需要额外参数，只接受一个空的 JSON 对象。
-const hasValidBody = async (request: Request): Promise<boolean> => {
+// start 只接受空对象；end 只接受稳定 outcome，技术失败还必须带稳定错误码。
+const parseBody = async (
+    request: Request,
+    action: LifecycleAction,
+): Promise<true | AiRealtimeSessionEndRequest | null> => {
     const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
-    if (!contentType.includes("application/json")) return false;
+    if (!contentType.includes("application/json")) return null;
 
     const contentLength = Number(request.headers.get("content-length") ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > 2048) return false;
+    if (Number.isFinite(contentLength) && contentLength > 2048) return null;
 
     try {
-        return emptyBodySchema.safeParse(await request.json()).success;
+        const body: unknown = await request.json();
+        if (action === "start") return emptyBodySchema.safeParse(body).success || null;
+
+        const result = endBodySchema.safeParse(body);
+        return result.success ? result.data : null;
     } catch {
-        return false;
+        return null;
     }
 };
 
@@ -40,7 +67,8 @@ export const handleSessionLifecycle = async (
     action: LifecycleAction,
 ): Promise<Response> => {
     const currentUserPromise = getCurrentUser();
-    if (!await hasValidBody(request) || !sessionIdPattern.test(sessionId)) {
+    const body = await parseBody(request, action);
+    if (!body || !sessionIdPattern.test(sessionId)) {
         return jsonError(400, "INVALID_REQUEST", "请求格式不正确。");
     }
 
@@ -66,6 +94,7 @@ export const handleSessionLifecycle = async (
             userId: currentUser.id,
             action,
             maxSessionMinutes,
+            endRequest: action === "end" && body !== true ? body : undefined,
         });
     } catch (error) {
         if (error instanceof SessionLifecycleError) {
