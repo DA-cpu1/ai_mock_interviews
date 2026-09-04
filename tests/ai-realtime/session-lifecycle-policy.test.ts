@@ -25,6 +25,8 @@ const session = (
     agentId: "agent-1",
     region: "cn-shanghai",
     status,
+    transcriptStatus: "pending",
+    feedbackStatus: "not_started",
     conversationMode: "semantic",
     modelConfigVersion: "voice-v1",
     tokenExpiresAt,

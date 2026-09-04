@@ -34,6 +34,9 @@ export type AiRealtimeSessionStatus =
     // 会话因异常而失败。
     | "failed";
 
+export type AiRealtimeTranscriptStatus = "pending" | "ready" | "insufficient" | "failed";
+export type AiRealtimeFeedbackStatus = "not_started" | "generating" | "ready" | "failed";
+
 // 浏览器提交的稳定结束语义；后续结束路径只允许使用这里的白名单值。
 export type AiRealtimeSessionEndOutcome = "completed" | "user_cancelled" | "failed";
 
@@ -92,6 +95,9 @@ export interface AiRealtimeSessionRecord {
     region: string;
     // 当前会话的服务端生命周期状态。
     status: AiRealtimeSessionStatus;
+    // 回调文本和反馈分别推进，不能用浏览器通话状态推断它们已经就绪。
+    transcriptStatus: AiRealtimeTranscriptStatus;
+    feedbackStatus: AiRealtimeFeedbackStatus;
     // 固定使用语义对话模式。
     conversationMode: "semantic";
     // 本次会话使用的模型配置版本，便于追踪和复现。
@@ -110,6 +116,28 @@ export interface AiRealtimeSessionRecord {
     endOutcome?: AiRealtimeSessionEndOutcome;
     // 会话失败时记录的错误码。
     errorCode?: AiRealtimeSessionErrorCode | AiRealtimeSessionEndErrorCode;
+    agentInstanceId?: string;
+    providerStoppedAt?: string;
+    lastTranscriptAt?: string;
+    transcriptMessageCount?: number;
+    feedbackId?: string;
+    generationAttemptId?: string;
+    generationLeaseExpiresAt?: string;
+    feedbackErrorCode?: string;
+}
+
+// 一个 Session 可包含多条权威 TranscriptMessage；同一 Session 最多生成一份 Feedback。
+// source 固定为回调，避免浏览器展示字幕被误当成持久化与评分依据。
+export interface TranscriptMessage {
+    eventKey: string;
+    role: "user" | "assistant";
+    text: string;
+    sentenceId?: number;
+    dialogueId?: string;
+    roundId?: string;
+    source: "aliyun_callback";
+    occurredAt: string;
+    receivedAt: string;
 }
 
 // 用户维度的实时会话占用状态，用于限制同一用户重复创建活动会话。

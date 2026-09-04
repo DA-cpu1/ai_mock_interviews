@@ -140,6 +140,8 @@ export async function POST(request: Request) {
         agentId: config.agentId,
         region: config.region,
         status: "created",
+        transcriptStatus: "pending",
+        feedbackStatus: "not_started",
         conversationMode: "semantic",
         modelConfigVersion: "voice-v2-dynamic-questions",
         tokenExpiresAt: token.expiresAt,

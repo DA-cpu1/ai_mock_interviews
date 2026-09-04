@@ -6,6 +6,7 @@ import {Button} from "@/components/ui/button";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
 import {INTERVIEW_TEMPLATES} from "@/constants/interviews";
 import {getInterviewCover} from "@/lib/utils";
+import type {FeedbackRecord} from "@/types/feedback";
 
 const InterviewCard = ({
                            interviewId,
@@ -14,7 +15,7 @@ const InterviewCard = ({
                            techstack,
                            createdAt,
                        }: InterviewCardProps) => {
-    const feedback = null as Feedback | null;
+    const feedback = null as FeedbackRecord | null;
 
     const normalizedType = INTERVIEW_TEMPLATES.find((template) => template.type === type)?.title
         ?? type;
