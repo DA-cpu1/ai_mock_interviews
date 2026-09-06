@@ -6,6 +6,10 @@ import type {AiRealtimeSessionRecord, TranscriptMessage} from "@/types/ai-realti
 
 import {getCallbackSessionPlan} from "./callback-policy";
 import {createTranscriptEventKey, normalizeTranscriptText} from "./transcript-event-key";
+import {
+    getTranscriptReadiness,
+    MAX_TRANSCRIPT_MESSAGES,
+} from "./transcript-readiness";
 
 export type CallbackPersistenceErrorCode = "SESSION_NOT_FOUND" | "AGENT_MISMATCH" | "SESSION_INSTANCE_MISMATCH";
 export class CallbackPersistenceError extends Error {
@@ -19,6 +23,50 @@ export interface PersistedCallbackResult {
     insertedMessages: number;
     duplicateMessages: number;
 }
+
+export interface ReadTranscriptResult {
+    // Session 提供 stop 时间；readiness 提供反馈生成前必须满足的状态和规范化正文。
+    session: AiRealtimeSessionRecord;
+    readiness: ReturnType<typeof getTranscriptReadiness>;
+}
+
+/**
+ * 读取服务端回调保存的权威 transcript，并判断它是否已经适合生成反馈。
+ * 这个函数不读取浏览器字幕，也不在读取阶段修改 Session 状态；状态写回由 finalize 流程负责。
+ */
+export const readTranscriptForFeedback = async (
+    sessionId: string,
+    options: {now?: Date} = {},
+): Promise<ReadTranscriptResult | null> => {
+    const sessionRef = db.collection("interviewSessions").doc(sessionId);
+    const sessionSnapshot = await sessionRef.get();
+    // 先判断 Session 是否存在，避免对不存在的面试继续读取子集合。
+    if (!sessionSnapshot.exists) return null;
+
+    // 多读一条哨兵文档即可识别越界；真正交给策略处理的消息仍受 200 条上限保护。
+    // 查询只按时间取候选集，同一时间的 eventKey 排序在纯函数中完成，避免依赖复合索引。
+    const messageSnapshot = await sessionRef.collection("messages")
+        .orderBy("occurredAt", "asc")
+        .limit(MAX_TRANSCRIPT_MESSAGES + 1)
+        .get();
+    const session = sessionSnapshot.data() as AiRealtimeSessionRecord;
+    const messages = messageSnapshot.docs.map(
+        // M3 已限制写入字段；M4 的纯策略仍会再次检查运行时数据。
+        (snapshot) => snapshot.data() as TranscriptMessage,
+    );
+
+    return {
+        session,
+        // now 可注入固定时间，生产默认使用当前时间，测试不依赖真实时钟。
+        readiness: getTranscriptReadiness({
+            providerStoppedAt: session.providerStoppedAt,
+            lastTranscriptAt: session.lastTranscriptAt,
+            messages,
+            nowMs: (options.now ?? new Date()).getTime(),
+        }),
+    };
+};
+
 const prepareMessages = (callback: NormalizedAliyunCallback): PreparedMessage[] => {
     if (callback.event !== "chat_record") return [];
     const messages = new Map<string, PreparedMessage>();
