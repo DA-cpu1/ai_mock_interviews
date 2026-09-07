@@ -5,7 +5,7 @@ import type {
     FeedbackCategoryScore,
     FeedbackContent,
     FeedbackDimensionId,
-} from "@/types/feedback";
+} from "../../types/feedback.ts";
 
 export const FEEDBACK_DIMENSION_LABELS: Record<FeedbackDimensionId, string> = {
     communication: "沟通表达",
