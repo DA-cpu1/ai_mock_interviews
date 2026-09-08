@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         return jsonError(400, parseResult.code, "回调数据格式不正确。");
     }
     if (parseResult.kind === "ignored") {
-        return new Response(null, {status: 204, headers: NO_STORE_HEADERS});
+        return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
     }
 
     try {
@@ -78,5 +78,6 @@ export async function POST(request: Request) {
         return jsonError(503, "CALLBACK_PERSISTENCE_FAILED", "回调暂时无法保存，请稍后重试。");
     }
 
-    return new Response(null, {status: 204, headers: NO_STORE_HEADERS});
+    // Aliyun treats only HTTP 200 as a successful callback acknowledgement.
+    return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
 }
