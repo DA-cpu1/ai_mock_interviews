@@ -23,6 +23,15 @@ const jsonError = (status: number, code: string, message: string) => Response.js
     {status, headers: NO_STORE_HEADERS},
 );
 
+// Aliyun may probe the configured callback URL before sending POST events.
+export function GET() {
+    return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
+}
+
+export function HEAD() {
+    return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
+}
+
 // 回调来自阿里云服务，不具备用户的 Firebase Cookie；这里使用独立专用 Token，
 // 持久化层再根据 sessionId、agentId 和 instanceId 在数据库边界校验归属。
 export async function POST(request: Request) {
