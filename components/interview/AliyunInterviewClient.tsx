@@ -879,10 +879,13 @@ const AliyunInterviewClient = ({
             </section>
 
             {!isTestPage && callStatus === "ended" && feedbackSessionId ? (
-                <p className={styles.completionNotice} role="status">
-                    本次面试已保存
-                    <span>SESSION {feedbackSessionId.slice(0, 8)}</span>
-                </p>
+                <div className={styles.completionNotice}>
+                    <p role="status">本次面试已保存</p>
+                    {/* 仅非技术失败且结束已保存时出现；携带本次 Session，避免混淆多次练习。 */}
+                    <Link className={styles.backLink} href={`/interview/${encodeURIComponent(interviewId ?? "")}/feedback?sessionId=${encodeURIComponent(feedbackSessionId)}`}>
+                        <Sparkles size={16} aria-hidden="true"/>查看本次反馈
+                    </Link>
+                </div>
             ) : null}
 
             {/* 三项固定说明：SDK 数据链路、音频采集范围和当前可观测状态。 */}

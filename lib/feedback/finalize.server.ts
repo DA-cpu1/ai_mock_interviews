@@ -1,4 +1,5 @@
 import "server-only";
+import {db} from "@/firebase/admin";
 
 import {getOwnedInterviewPromptContext} from "@/lib/interviews/interview-store.server";
 import {readTranscriptForFeedback} from "@/lib/ai-realtime/transcript-store.server";
@@ -10,8 +11,18 @@ export interface FinalizeResult { status: FinalizeState; feedbackId?: string; re
 
 /** 编排边界先做所有权校验，再读取 transcript；模型调用永远发生在事务之外。 */
 export const finalizeFeedback = async (sessionId: string, userId: string, options: {now?: Date} = {}): Promise<FinalizeResult> => {
+    // 即使反馈已存在，也先核验会话归属，避免 ready 快路径绕过授权。
+    const session = await db.collection("interviewSessions").doc(sessionId).get();
+    if (!session.exists) throw new FeedbackStoreError("NOT_FOUND");
+    if (session.get("userId") !== userId) throw new FeedbackStoreError("FORBIDDEN");
     const existing = await readFeedback(sessionId);
-    if (existing) return {status: "ready", feedbackId: existing.id};
+    if (existing) {
+        if (existing.userId !== userId || existing.interviewId !== session.get("interviewId")) throw new FeedbackStoreError("FORBIDDEN");
+        return {status: "ready", feedbackId: existing.id};
+    }
+    if (session.get("status") === "failed" || session.get("endOutcome") === "failed") {
+        return {status: "provider_failed", errorCode: "CALL_FAILED"};
+    }
     const transcriptResult = await readTranscriptForFeedback(sessionId, options);
     if (!transcriptResult || transcriptResult.session.userId !== userId) throw new FeedbackStoreError(transcriptResult ? "FORBIDDEN" : "NOT_FOUND");
     const readiness = transcriptResult.readiness;
