@@ -144,10 +144,16 @@ const digestAuthorization = (value: string): Buffer =>
 export const isValidCallbackAuthorization = (
     authorization: string | undefined,
     configuredToken: string,
-): boolean => timingSafeEqual(
-    digestAuthorization(authorization ?? ""),
-    digestAuthorization(configuredToken),
-);
+): boolean => {
+    const value = authorization?.trim() ?? "";
+    const candidates = [value];
+    if (/^Bearer\s+/i.test(value)) candidates.push(value.replace(/^Bearer\s+/i, ""));
+
+    return candidates.some((candidate) => timingSafeEqual(
+        digestAuthorization(candidate),
+        digestAuthorization(configuredToken),
+    ));
+};
 
 export const parseAliyunCallbackPayload = (input: unknown): AliyunCallbackParseResult => {
     const envelopeResult = callbackEnvelopeSchema.safeParse(input);

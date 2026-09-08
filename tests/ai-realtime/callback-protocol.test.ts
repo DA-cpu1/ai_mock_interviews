@@ -8,10 +8,11 @@ import {
     readAliyunCallbackBody,
 } from "../../lib/aliyun/callback-protocol.ts";
 
-test("accepts only the exact configured callback authorization value", () => {
+test("accepts raw and Bearer callback authorization values", () => {
     const configuredToken = "test-callback-token-with-at-least-32-characters";
 
     assert.equal(isValidCallbackAuthorization(configuredToken, configuredToken), true);
+    assert.equal(isValidCallbackAuthorization(`Bearer ${configuredToken}`, configuredToken), true);
     assert.equal(isValidCallbackAuthorization(undefined, configuredToken), false);
     assert.equal(isValidCallbackAuthorization("forged-token", configuredToken), false);
     assert.equal(isValidCallbackAuthorization(`${configuredToken}-extra`, configuredToken), false);
