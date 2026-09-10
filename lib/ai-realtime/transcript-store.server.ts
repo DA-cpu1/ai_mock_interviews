@@ -55,11 +55,16 @@ export const readTranscriptForFeedback = async (
         (snapshot) => snapshot.data() as TranscriptMessage,
     );
 
+    // SDK 挂断后 agent_stop 回调可能延迟或丢失；已由服务端确认完成的会话
+    // 使用 endedAt 作为临时停止点，仍保留静默窗口等待迟到的 chat_record。
+    const providerStoppedAt = session.providerStoppedAt
+        ?? (session.status === "completed" ? session.endedAt : undefined);
+
     return {
         session,
         // now 可注入固定时间，生产默认使用当前时间，测试不依赖真实时钟。
         readiness: getTranscriptReadiness({
-            providerStoppedAt: session.providerStoppedAt,
+            providerStoppedAt,
             lastTranscriptAt: session.lastTranscriptAt,
             messages,
             nowMs: (options.now ?? new Date()).getTime(),

@@ -1,5 +1,24 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## 面试反馈与回调配置
+
+反馈使用阿里云服务端回调保存的对话文本；页面能显示字幕不代表服务端已收到文本。
+
+1. 在本地 `.env.local` 或部署环境中设置 `ALIYUN_AI_CALLBACK_TOKEN`（32～512 个字符的随机密钥）。不要提交或输出真实密钥。
+2. 在阿里云 IMS 控制台打开对应智能体的「管理 → 回调配置」，开启「智能体状态回调」和「聊天记录实时回调」。
+3. 将回调地址设置为公网可访问的 HTTPS 地址，路径为 `/api/ai-realtime/callback`；控制台鉴权 Token 必须与服务端配置一致。阿里云无法直接访问开发电脑的 `localhost`。
+4. 反馈模型需要 `AI_FEEDBACK_ENABLED=true`，以及 `ALIYUN_BAILIAN_API_KEY`、`ALIYUN_BAILIAN_BASE_URL`、`ALIYUN_BAILIAN_MODEL`。更改环境配置后重新启动开发服务器或更新部署。
+
+正常结束后，只要服务端保存了候选人的有效回答，短回答也允许生成反馈。没有回答记录时会先等待回调；已有「回答不足」记录可以在反馈页点击「重试生成反馈」。没有收到的文本无法通过降低字数门槛补回。
+
+排查时检查回调请求状态：404 表示地址或运行中的路由需要核对，503 表示回调配置未启用或无效，401 表示鉴权失败，400 表示请求格式不匹配。GET/HEAD 返回 200 只代表探测地址可达，不代表 POST 回调已启用或文本已保存。
+
+通过鉴权和格式校验的回调会先返回 200，随后使用 Next.js `after()` 保存，避免数据库延迟堵住阿里云的后续回调。Vercel 日志中的 `callback accepted` 表示已接收并安排保存，`callback persisted` 才表示保存成功；`callback persistence after response failed` 表示保存失败。可用 `sessionId` 关联这些日志，并查看保存耗时。日志不记录 Token 或原始对话正文。
+
+`after()` 受路由执行时限约束（当前为 60 秒），并不是持久化消息队列。已返回 200 后的保存失败无法通过 HTTP 响应要求阿里云重发；如持续出现失败或只有接收日志，应继续排查 Firestore 连接、权限和平台超时，不能将 200 当作文本已入库。
+
+阿里云配置说明：[智能体回调](https://help.aliyun.com/zh/ims/user-guide/agent-callback)。
+
 ## Getting Started
 
 First, run the development server:

@@ -20,7 +20,7 @@ test("builds a versioned prompt with job context and all scoring criteria", () =
         transcript: "assistant: 请说明一次性能优化。\nuser: 我通过缓存降低了接口延迟。",
     });
 
-    assert.equal(FEEDBACK_PROMPT_VERSION, "feedback-v1");
+    assert.equal(FEEDBACK_PROMPT_VERSION, "feedback-v2");
     assert.match(prompt.user, /岗位：前端工程师/);
     assert.match(prompt.user, /技术栈：React、TypeScript、Next\.js/);
     for (const criterion of Object.values(FEEDBACK_DIMENSION_CRITERIA)) {

@@ -10,14 +10,14 @@ import {normalizeTranscriptText} from "./transcript-event-key.ts";
 // agent_stop 只表示智能体停止，不保证最后一条 chat_record 已经到达。
 // 等待这一段安静窗口，可以避免用缺少最后回答的 transcript 生成反馈。
 export const TRANSCRIPT_SILENCE_WINDOW_MS = 5_000;
+// 刚挂断还没有回答记录时，先给回调到达留出时间，不立即判为无回答。
+export const TRANSCRIPT_ARRIVAL_GRACE_MS = 30_000;
 // 尚未收到 agent_stop 时没有准确的剩余时间，调用方按这个间隔再次检查。
 export const TRANSCRIPT_PENDING_RETRY_MS = 1_000;
 // 这些限制同时保护 Firestore 读取、内存使用和后续发送给模型的 prompt 大小。
 export const MAX_TRANSCRIPT_MESSAGES = 200;
 export const MAX_TRANSCRIPT_MESSAGE_CHARACTERS = 4_000;
 export const MAX_TRANSCRIPT_TOTAL_CHARACTERS = 60_000;
-// 只有候选人的有效文本参与这个阈值，避免“只说了欢迎语”被当成完成面试。
-const MIN_USER_ANSWER_CHARACTERS = 20;
 
 export type TranscriptReadinessFailureCode =
     | "MESSAGE_LIMIT_EXCEEDED"
@@ -71,6 +71,7 @@ const hasValidMessageFields = (message: TranscriptMessage): boolean => {
         && typeof record.eventKey === "string"
         && typeof record.text === "string"
         && typeof record.occurredAt === "string"
+        && typeof record.receivedAt === "string"
         && record.source === "aliyun_callback";
 };
 
@@ -101,7 +102,7 @@ const prepareTranscript = (messages: readonly TranscriptMessage[]): PreparedTran
         if (!hasValidMessageFields(message)) {
             return {kind: "failed", code: "INVALID_MESSAGE"};
         }
-        if (Number.isNaN(Date.parse(message.occurredAt))) {
+        if (Number.isNaN(Date.parse(message.occurredAt)) || Number.isNaN(Date.parse(message.receivedAt))) {
             return {kind: "failed", code: "INVALID_TIMESTAMP"};
         }
     }
@@ -168,7 +169,7 @@ export const getTranscriptReadiness = ({
     }
 
     const latestMessageMs = prepared.value.messages.reduce(
-        (latest, message) => Math.max(latest, Date.parse(message.occurredAt)),
+        (latest, message) => Math.max(latest, Date.parse(message.occurredAt), Date.parse(message.receivedAt)),
         stoppedMs,
     );
     // 同一时刻读取 Session 和消息不是原子快照，以消息自身时间补足可能过期的 Session 元数据。
@@ -178,12 +179,14 @@ export const getTranscriptReadiness = ({
         return {status: "pending", retryAfterMs: Math.ceil(remainingMs)};
     }
 
-    const hasAssistantQuestion = prepared.value.messages.some(
-        (message) => message.role === "assistant",
-    );
-    // 最小有效问答需要 AI 发言和候选人至少 20 个有效字符，欢迎语本身不算回答。
+    const arrivalRemainingMs = TRANSCRIPT_ARRIVAL_GRACE_MS - (nowMs - stoppedMs);
+    if (prepared.value.userCharacters === 0 && arrivalRemainingMs > 0) {
+        return {status: "pending", retryAfterMs: Math.min(TRANSCRIPT_PENDING_RETRY_MS, Math.ceil(arrivalRemainingMs))};
+    }
+
+    // 短回答或缺少 AI 提问也允许反馈；只有完全没有候选人有效文本才拦截。
     return {
-        status: hasAssistantQuestion && prepared.value.userCharacters >= MIN_USER_ANSWER_CHARACTERS
+        status: prepared.value.userCharacters > 0
             ? "ready"
             : "insufficient",
         ...prepared.value,

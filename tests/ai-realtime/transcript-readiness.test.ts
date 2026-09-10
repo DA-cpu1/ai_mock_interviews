@@ -70,6 +70,28 @@ test("waits five seconds after the latest late message", () => {
     assert.deepEqual(result, {status: "pending", retryAfterMs: 3_000});
 });
 
+test("accepts short answers even without an assistant message", () => {
+    for (const text of ["会", "我使用过 React。", "我负责过缓存架构改造，并通过监控验证了效果。"]) {
+        for (const prefix of [[], [message("assistant", "请介绍你的经历。")]]) {
+            const result = getTranscriptReadiness({
+                providerStoppedAt: STOPPED_AT,
+                messages: [...prefix, message("user", text)],
+                nowMs: NOW,
+            });
+            assert.equal(result.status, "ready");
+        }
+    }
+});
+
+test("does not generate feedback from whitespace or completion markers alone", () => {
+    const result = getTranscriptReadiness({
+        providerStoppedAt: STOPPED_AT,
+        messages: [message("assistant", "欢迎。"), message("user", " \n[INTERVIEW_COMPLETE] ")],
+        nowMs: NOW,
+    });
+    assert.equal(result.status, "insufficient");
+});
+
 test("uses the latest stored message when session metadata is stale", () => {
     const result = getTranscriptReadiness({
         providerStoppedAt: STOPPED_AT,
@@ -79,6 +101,25 @@ test("uses the latest stored message when session metadata is stale", () => {
     });
 
     assert.deepEqual(result, {status: "pending", retryAfterMs: 3_000});
+});
+
+test("waits for delayed callbacks before declaring that no answer was received", () => {
+    const messages = [message("assistant", "你好。")];
+    const input = {providerStoppedAt: STOPPED_AT, messages};
+    assert.deepEqual(getTranscriptReadiness({...input, nowMs: Date.parse(STOPPED_AT) + 6_000}), {
+        status: "pending", retryAfterMs: 1_000,
+    });
+    assert.equal(getTranscriptReadiness({...input, nowMs: Date.parse(STOPPED_AT) + 30_000}).status, "insufficient");
+    // 早先判定无回答后，迟到的真实回答仍可在下一次读取时恢复。
+    assert.equal(getTranscriptReadiness({...input, messages: [...messages, message("user", "会")], nowMs: NOW}).status, "ready");
+});
+
+test("starts the quiet window when old dialogue actually arrives", () => {
+    const messages = [{...message("user", "这是延迟到达的回答。"), receivedAt: "2026-09-06T09:59:58.000Z"}];
+    assert.deepEqual(getTranscriptReadiness({providerStoppedAt: STOPPED_AT, messages, nowMs: NOW}), {
+        status: "pending", retryAfterMs: 3_000,
+    });
+    assert.equal(getTranscriptReadiness({providerStoppedAt: STOPPED_AT, messages, nowMs: NOW + 3_000}).status, "ready");
 });
 
 test("marks an empty call insufficient after the quiet window", () => {

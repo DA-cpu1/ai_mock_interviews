@@ -10,7 +10,7 @@ import type {FeedbackPageState} from "@/lib/feedback/page-policy";
 const messages: Record<PollState | "call_failed", [string, string]> = {
     transcript_pending: ["正在整理面试记录", "正在等待本次面试记录完成。"],
     generating: ["正在生成反馈", "正在分析你的回答，请稍候。"],
-    insufficient_transcript: ["有效回答不足", "本次记录尚不足以生成反馈，请重新练习并完成至少一轮问答。"],
+    insufficient_transcript: ["暂未取得可用于反馈的回答记录", "短回答也可以生成反馈。请重试读取本次记录；若仍未取得回答，可能是记录尚未同步，请稍后再试。"],
     provider_failed: ["反馈暂时无法生成", "面试记录已保留，可以稍后重试。"],
     ready: ["反馈已生成", "正在加载本次反馈。"],
     timeout: ["处理时间较长", "本次等待已结束，记录仍保留。你可以继续查询或稍后返回。"],
@@ -27,7 +27,8 @@ export default function FeedbackGenerationStatus({sessionId, initialState}: {
     const [state, setState] = useState<PollState | "call_failed">(initialState);
     const [attempt, setAttempt] = useState(0);
     const busy = state === "transcript_pending" || state === "generating" || state === "ready";
-    const retryable = state === "provider_failed" || state === "timeout" || state === "request_failed";
+    const retryable = state === "provider_failed" || state === "timeout" || state === "request_failed"
+        || state === "insufficient_transcript";
 
     useEffect(() => {
         // 服务端只读取；自动生成和有界轮询由这个小组件负责，失败后必须显式重试。

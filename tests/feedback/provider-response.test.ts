@@ -90,7 +90,7 @@ test("accepts fixed JSON fixture and sends strict schema request", async () => {
 
     assert.deepEqual(result.content, validContent);
     assert.equal(result.model, config.model);
-    assert.equal(result.promptVersion, "feedback-v1");
+    assert.equal(result.promptVersion, "feedback-v2");
     const request = requests[0] as Record<string, unknown>;
     assert.equal(request.model, config.model);
     assert.equal(request.temperature, 0);

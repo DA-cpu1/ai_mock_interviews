@@ -23,6 +23,7 @@ interface InterviewCardProps {
     type: string;
     techstack: string[];
     createdAt: string;
+    feedbackSummary?: import("@/lib/interviews/interview-store.server").InterviewFeedbackSummary;
 }
 
 interface AgentProps {

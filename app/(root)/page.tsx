@@ -5,13 +5,16 @@ import InterviewCard from "@/components/InterviewCard";
 import InterviewTemplateCard from "@/components/InterviewTemplateCard";
 import {INTERVIEW_TEMPLATES} from "@/constants/interviews";
 import {getCurrentUser} from "@/lib/action/auth.action";
-import {listUserInterviews} from "@/lib/interviews/interview-store.server";
+import {listLatestFeedbackSummaries, listUserInterviews} from "@/lib/interviews/interview-store.server";
 
 const Page = async () => {
     const currentUser = await getCurrentUser();
     const savedInterviews = currentUser
         ? await listUserInterviews(currentUser.id)
         : [];
+    const feedbackSummaries = currentUser
+        ? await listLatestFeedbackSummaries(currentUser.id, savedInterviews.map((interview) => interview.id))
+        : {};
 
     return (
         <>
@@ -66,6 +69,7 @@ const Page = async () => {
                                 type={interview.type}
                                 techstack={[...interview.techstack]}
                                 createdAt={interview.createdAt}
+                                feedbackSummary={feedbackSummaries[interview.id]}
                             />
                         ))}
                     </div>

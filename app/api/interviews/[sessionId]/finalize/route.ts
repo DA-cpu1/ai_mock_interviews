@@ -5,6 +5,8 @@ import {FeedbackStoreError} from "@/lib/feedback/feedback-store.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// 反馈生成包含一次百炼模型调用；避免平台默认短时限在响应前关闭连接。
+export const maxDuration = 60;
 const idSchema = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const headers = {"Cache-Control": "no-store"};
 

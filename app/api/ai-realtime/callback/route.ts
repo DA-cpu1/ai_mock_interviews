@@ -1,3 +1,5 @@
+import {after} from "next/server";
+
 import {
     CallbackHandlerError,
     CallbackPersistenceError,
@@ -15,6 +17,8 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// 响应后保存仍受平台执行时限约束。
+export const maxDuration = 60;
 
 const NO_STORE_HEADERS = {"Cache-Control": "no-store"};
 
@@ -72,21 +76,28 @@ export async function POST(request: Request) {
         return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
     }
 
-    try {
-        await handleAliyunCallback(parseResult.callback);
-    } catch (error) {
-        if (error instanceof CallbackPersistenceError) {
-            if (error.code === "SESSION_NOT_FOUND") {
-                return jsonError(404, error.code, "回调关联的面试会话不存在。");
-            }
-            return jsonError(409, error.code, "回调与面试会话的服务实例不匹配。");
+    const callback = parseResult.callback;
+    const diagnostic = {event: callback.event, sessionId: callback.sessionId};
+    // 阿里云可能串行投递：不能让 Firestore 延迟阻塞后续 chat_record。
+    // after 在响应发送后执行，并由 Next.js/Vercel 管理任务生命周期。
+    after(async () => {
+        const startedAt = Date.now();
+        try {
+            const result = await handleAliyunCallback(callback);
+            console.info("[ai-realtime] callback persisted", {
+                ...diagnostic, ...result, durationMs: Date.now() - startedAt,
+            });
+        } catch (error) {
+            // 已返回 200，不能再通过 HTTP 触发重试；保留可关联的脱敏失败日志。
+            console.error("[ai-realtime] callback persistence after response failed", {
+                ...diagnostic,
+                category: error instanceof CallbackPersistenceError || error instanceof CallbackHandlerError
+                    ? error.code : "CALLBACK_PERSISTENCE_FAILED",
+                durationMs: Date.now() - startedAt,
+            });
         }
-        if (error instanceof CallbackHandlerError) {
-            return jsonError(503, error.code, "回调暂时无法保存，请稍后重试。");
-        }
-        return jsonError(503, "CALLBACK_PERSISTENCE_FAILED", "回调暂时无法保存，请稍后重试。");
-    }
-
+    });
+    console.info("[ai-realtime] callback accepted", diagnostic);
     // Aliyun treats only HTTP 200 as a successful callback acknowledgement.
     return new Response(null, {status: 200, headers: NO_STORE_HEADERS});
 }

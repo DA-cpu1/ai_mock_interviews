@@ -6,7 +6,6 @@ import {Button} from "@/components/ui/button";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
 import {INTERVIEW_TEMPLATES} from "@/constants/interviews";
 import {getInterviewCover} from "@/lib/utils";
-import type {FeedbackRecord} from "@/types/feedback";
 
 const InterviewCard = ({
                            interviewId,
@@ -14,8 +13,9 @@ const InterviewCard = ({
                            type,
                            techstack,
                            createdAt,
+                           feedbackSummary,
                        }: InterviewCardProps) => {
-    const feedback = null as FeedbackRecord | null;
+    const feedback = feedbackSummary?.status === "ready" ? feedbackSummary : null;
 
     const normalizedType = INTERVIEW_TEMPLATES.find((template) => template.type === type)?.title
         ?? type;
@@ -77,12 +77,12 @@ const InterviewCard = ({
                     <Button asChild className="btn-primary">
                         <Link
                             href={
-                                feedback
-                                    ? `/interview/${interviewId}/feedback`
+                                feedbackSummary
+                                    ? `/interview/${interviewId}/feedback?sessionId=${feedbackSummary.sessionId}`
                                     : `/interview/${interviewId}`
                             }
                         >
-                            {feedback ? "查看反馈" : "进入面试"}
+                            {feedback ? "查看反馈" : feedbackSummary?.status === "processing" ? "反馈生成中" : feedbackSummary?.status === "failed" ? "重试反馈" : "进入面试"}
                         </Link>
                     </Button>
                 </div>

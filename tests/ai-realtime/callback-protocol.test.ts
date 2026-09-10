@@ -149,6 +149,21 @@ test("normalizes a known status event without retaining its data", () => {
     });
 });
 
+test("accepts the support-ticket agent_start shape with a numeric code and microsecond timestamp", () => {
+    const result = parseAliyunCallbackPayload({
+        aiAgentId: "agent-fixture", instanceId: "instance-fixture",
+        event: "agent_start", code: 1001, message: "Agent start event",
+        userData: JSON.stringify({sessionId: "session-fixture", source: "interview"}),
+        timestamp: "2026-09-08T10:30:52.824212+00:00",
+        extendData: null, callbackType: "agent status",
+    });
+    assert.equal(result.kind, "accepted");
+    if (result.kind === "accepted") {
+        assert.equal(result.callback.event, "agent_start");
+        assert.equal(result.callback.sessionId, "session-fixture");
+    }
+});
+
 test("accepts the official error event without retaining its message data", () => {
     const result = parseAliyunCallbackPayload({
         aiAgentId: "agent-1",
