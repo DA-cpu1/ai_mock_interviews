@@ -65,7 +65,7 @@ These instructions apply to the entire repository. Keep the Next.js-managed bloc
 - Never give `ALIYUN_RTC_APP_KEY`, Firebase Admin credentials, callback tokens, or other server secrets a `NEXT_PUBLIC_` prefix. The feature must remain safely disabled when `AI_REALTIME_ENABLED` is not exactly `true`.
 - Continue validating content type, body size, fields, authentication, ownership, quotas, and bounded TTL/session values at server entry points. Sensitive responses must use `Cache-Control: no-store`.
 - RTC audio flows directly between the browser/AICallKit and Aliyun ARTC; Next.js must not proxy audio or hold a long-lived media WebSocket. The current product uses microphone-only audio and does not save raw recordings.
-- Browser subtitles are display-only and are not authoritative for persisted transcripts or scoring. When callback persistence is implemented, authenticate callbacks, enforce size limits, and deduplicate events before writing Firestore.
+- For personal practice, a user-approved exception allows finalized browser subtitles as a feedback fallback after normal session completion when callback answers are absent. Authenticate uploads, check ownership, bound payload size, store browser snapshots separately, and label feedback provenance and truncation. Browser subtitles remain non-authoritative and must never impersonate callback data or support formal hiring/exam scoring. Authenticate callbacks, enforce size limits, and deduplicate events before writing Firestore.
 
 ## Product scope and architecture decisions
 

@@ -48,6 +48,7 @@ export const claimFeedbackGeneration = async (sessionId: string, userId: string,
 export const saveGeneratedFeedback = async (input: {
     sessionId: string; userId: string; interviewId: string; transcriptHash: string;
     content: FeedbackContent; model: string; promptVersion: string; attemptId: string;
+    transcriptSource?: "aliyun_callback" | "browser_subtitles"; transcriptTruncated?: boolean;
     createdAt?: string;
 }): Promise<FeedbackRecord> => {
     const sessionRef = db.collection("interviewSessions").doc(input.sessionId);
@@ -62,6 +63,8 @@ export const saveGeneratedFeedback = async (input: {
         if (existing.exists) return existing.data() as FeedbackRecord;
         const totalScore = Math.round(input.content.categoryScores.reduce((sum, item) => sum + item.score, 0) / input.content.categoryScores.length);
         const feedback: FeedbackRecord = {id: input.sessionId, sessionId: input.sessionId, interviewId: input.interviewId, userId: input.userId, totalScore, ...input.content, model: input.model, promptVersion: input.promptVersion, transcriptHash: input.transcriptHash, createdAt: input.createdAt ?? new Date().toISOString()};
+        feedback.transcriptSource = input.transcriptSource ?? "aliyun_callback";
+        feedback.transcriptTruncated = input.transcriptTruncated ?? false;
         transaction.create(feedbackRef, feedback);
         transaction.update(sessionRef, {feedbackId: feedback.id, feedbackStatus: "ready", generationLeaseExpiresAt: null, feedbackErrorCode: null});
         return feedback;

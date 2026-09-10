@@ -27,6 +27,7 @@ export interface PersistedCallbackResult {
 export interface ReadTranscriptResult {
     // Session 提供 stop 时间；readiness 提供反馈生成前必须满足的状态和规范化正文。
     session: AiRealtimeSessionRecord;
+    hasCallbackAnswer: boolean;
     readiness: ReturnType<typeof getTranscriptReadiness>;
 }
 
@@ -62,6 +63,7 @@ export const readTranscriptForFeedback = async (
 
     return {
         session,
+        hasCallbackAnswer: messages.some((message) => message.role === "user" && typeof message.text === "string" && !!normalizeTranscriptText(message.text)),
         // now 可注入固定时间，生产默认使用当前时间，测试不依赖真实时钟。
         readiness: getTranscriptReadiness({
             providerStoppedAt,

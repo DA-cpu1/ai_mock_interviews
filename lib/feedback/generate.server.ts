@@ -31,6 +31,7 @@ export class FeedbackGenerationError extends Error {
 export interface GenerateFeedbackInput {
     interview: InterviewPromptContext;
     transcript: string;
+    transcriptSource?: "aliyun_callback" | "browser_subtitles";
 }
 
 export interface GeneratedFeedback {

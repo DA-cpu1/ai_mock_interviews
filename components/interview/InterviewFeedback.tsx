@@ -4,6 +4,10 @@ import type {FeedbackRecord} from "@/types/feedback";
 // 正文保持为 Server Component，模型信息、文本哈希等内部字段不传入浏览器组件。
 export default function InterviewFeedback({feedback}: {feedback: FeedbackRecord}) {
     return <div className="space-y-8">
+        {feedback.transcriptSource === "browser_subtitles" ? <aside className="rounded-lg border border-white/15 p-4 text-sm leading-6">
+            本次反馈基于浏览器保存的最终字幕，可能存在识别错误或缺漏，仅供个人练习参考。
+            {feedback.transcriptTruncated ? "由于记录超出容量，本次只分析保留下来的部分。" : null}
+        </aside> : null}
         <section className="flex flex-wrap items-end justify-between gap-4 border-y border-white/15 py-6" aria-labelledby="score-heading">
             <div><h2 id="score-heading" className="text-xl">本次练习总分</h2><p className="mt-2 text-sm">五个维度等权计算</p></div>
             <p><strong className="text-5xl text-emerald-300">{feedback.totalScore}</strong><span> / 100</span></p>

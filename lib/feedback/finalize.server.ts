@@ -2,7 +2,7 @@ import "server-only";
 import {db} from "@/firebase/admin";
 
 import {getOwnedInterviewPromptContext} from "@/lib/interviews/interview-store.server";
-import {readTranscriptForFeedback} from "@/lib/ai-realtime/transcript-store.server";
+import {readFeedbackTranscript} from "./transcript-source.server";
 import {generateFeedback, FeedbackGenerationError} from "./generate.server";
 import type {FinalizeState} from "./finalize-policy";
 import {claimFeedbackGeneration, markFeedbackFailed, markTranscriptStatus, readFeedback, saveGeneratedFeedback, FeedbackStoreError} from "./feedback-store.server";
@@ -23,7 +23,7 @@ export const finalizeFeedback = async (sessionId: string, userId: string, option
     if (session.get("status") === "failed" || session.get("endOutcome") === "failed") {
         return {status: "provider_failed", errorCode: "CALL_FAILED"};
     }
-    const transcriptResult = await readTranscriptForFeedback(sessionId, options);
+    const transcriptResult = await readFeedbackTranscript(sessionId, userId, options);
     if (!transcriptResult || transcriptResult.session.userId !== userId) throw new FeedbackStoreError(transcriptResult ? "FORBIDDEN" : "NOT_FOUND");
     const readiness = transcriptResult.readiness;
     if (readiness.status === "pending") return {status: "transcript_pending", retryAfterMs: readiness.retryAfterMs};
@@ -42,8 +42,8 @@ export const finalizeFeedback = async (sessionId: string, userId: string, option
     if (decision.kind === "ready") return {status: "ready", feedbackId: sessionId};
     if (decision.kind === "generating") return {status: "generating", retryAfterMs: 2_000};
     try {
-        const generated = await generateFeedback({interview: context, transcript: readiness.transcript});
-        const feedback = await saveGeneratedFeedback({sessionId, userId, interviewId: transcriptResult.session.interviewId, transcriptHash: readiness.transcriptHash, content: generated.content, model: generated.model, promptVersion: generated.promptVersion, attemptId: decision.attemptId!});
+        const generated = await generateFeedback({interview: context, transcript: readiness.transcript, transcriptSource: readiness.source});
+        const feedback = await saveGeneratedFeedback({sessionId, userId, interviewId: transcriptResult.session.interviewId, transcriptHash: readiness.transcriptHash, transcriptSource: readiness.source, transcriptTruncated: readiness.truncated, content: generated.content, model: generated.model, promptVersion: generated.promptVersion, attemptId: decision.attemptId!});
         return {status: "ready", feedbackId: feedback.id};
     } catch (error) {
         const code = error instanceof FeedbackGenerationError ? error.code : "FEEDBACK_PERSISTENCE_FAILED";

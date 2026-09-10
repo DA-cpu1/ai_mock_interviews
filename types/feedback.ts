@@ -32,5 +32,7 @@ export interface FeedbackRecord extends FeedbackContent {
     model: string;
     promptVersion: string;
     transcriptHash: string;
+    transcriptSource?: "aliyun_callback" | "browser_subtitles";
+    transcriptTruncated?: boolean;
     createdAt: string;
 }

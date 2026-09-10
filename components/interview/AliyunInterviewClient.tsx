@@ -19,6 +19,7 @@ import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
 import AliyunTranscriptPanel from "@/components/interview/AliyunTranscriptPanel";
+import {cacheFinalSubtitle, uploadCachedBrowserTranscript} from "@/lib/ai-realtime/browser-transcript-cache";
 import {
     mergeSubtitleMessage,
     parseSubtitleUpdate,
@@ -197,8 +198,12 @@ const AliyunInterviewClient = ({
     const mergeSubtitle = useCallback((role: AiRealtimeSubtitleRole, subtitle: AliyunSubtitle) => {
         const parsed = parseSubtitleUpdate(role, subtitle, Date.now());
         setMessages((current) => mergeSubtitleMessage(current, parsed.message));
+        const sessionId = sessionRef.current?.sessionId;
+        if (sessionId && !cacheFinalSubtitle(sessionId, parsed.message)) {
+            appendEvent("字幕仅保存在当前页面，请挂断并等待上传完成后再关闭页面。");
+        }
         return parsed.interviewComplete;
-    }, []);
+    }, [appendEvent]);
 
     // 移除当前 SDK 实例注册的所有事件监听。
     const removeEngineListeners = useCallback(() => {
@@ -236,7 +241,12 @@ const AliyunInterviewClient = ({
         // SDK 清理后 sessionRef 会释放，但反馈必须继续使用本次已落库的 sessionId，
         // 因此只在非技术失败的 end 成功后单独保留它。
         if (action === "end" && endRequest?.outcome !== "failed" && mountedRef.current) {
-            setFeedbackSessionId(sessionId);
+            try {
+                if (await uploadCachedBrowserTranscript(sessionId)) appendEvent("浏览器最终字幕已保存，可用于练习反馈。");
+            } catch {
+                appendEvent("回答记录暂未上传，进入反馈页后可重试。请保留当前标签页。");
+            }
+            if (mountedRef.current) setFeedbackSessionId(sessionId);
         }
 
         appendEvent(action === "start" ? "服务端已记录通话开始" : "服务端已记录通话结束");
@@ -880,7 +890,7 @@ const AliyunInterviewClient = ({
 
             {!isTestPage && callStatus === "ended" && feedbackSessionId ? (
                 <div className={styles.completionNotice}>
-                    <p role="status">本次面试已保存</p>
+                    <p role="status">通话已结束，可以查看本次反馈</p>
                     {/* 仅非技术失败且结束已保存时出现；携带本次 Session，避免混淆多次练习。 */}
                     <Link className={styles.backLink} href={`/interview/${encodeURIComponent(interviewId ?? "")}/feedback?sessionId=${encodeURIComponent(feedbackSessionId)}`}>
                         <Sparkles size={16} aria-hidden="true"/>查看本次反馈

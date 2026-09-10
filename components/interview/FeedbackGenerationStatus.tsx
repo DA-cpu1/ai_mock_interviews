@@ -6,6 +6,7 @@ import Link from "next/link";
 import {LoaderCircle, RotateCcw} from "lucide-react";
 import {pollFeedback, type PollState} from "@/lib/feedback/poll-feedback";
 import type {FeedbackPageState} from "@/lib/feedback/page-policy";
+import {BrowserTranscriptUploadError, uploadCachedBrowserTranscript} from "@/lib/ai-realtime/browser-transcript-cache";
 
 const messages: Record<PollState | "call_failed", [string, string]> = {
     transcript_pending: ["正在整理面试记录", "正在等待本次面试记录完成。"],
@@ -35,10 +36,19 @@ export default function FeedbackGenerationStatus({sessionId, initialState}: {
         if (attempt === 0 && initialState !== "transcript_pending" && initialState !== "generating") return;
         const controller = new AbortController();
         // 延后一拍可让 Strict Mode 的试探性挂载先清理，避免首屏重复提交。
-        const timer = setTimeout(() => void pollFeedback(sessionId, controller.signal, (next) => {
-            setState(next);
-            if (next === "ready") router.refresh();
-        }), 0);
+        const timer = setTimeout(() => void (async () => {
+            try {
+                await uploadCachedBrowserTranscript(sessionId, controller.signal);
+                if (controller.signal.aborted) return;
+                await pollFeedback(sessionId, controller.signal, (next) => {
+                    setState(next);
+                    if (next === "ready") router.refresh();
+                });
+            } catch (error) {
+                if (!controller.signal.aborted) setState(error instanceof BrowserTranscriptUploadError && error.status === 401
+                    ? "unauthenticated" : "request_failed");
+            }
+        })(), 0);
         return () => { clearTimeout(timer); controller.abort(); };
     }, [sessionId, initialState, attempt, router]);
 
